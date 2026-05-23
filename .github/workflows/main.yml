@@ -21,6 +21,8 @@ jobs:
   # ─────────────────────────────────────────────
   ci:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/hedaya_ci
 
     steps:
       - uses: actions/checkout@v4
@@ -35,13 +37,9 @@ jobs:
 
       - name: Generate Prisma Client
         run: npx prisma generate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Validate Prisma Schema
         run: npx prisma validate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
 
       - name: Run Lint (if exists)
         run: npm run lint --if-present

@@ -2,6 +2,8 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
+ARG DATABASE_URL=postgresql://postgres:postgres@localhost:5432/hedaya_ci
+ENV DATABASE_URL=$DATABASE_URL
 
 # Install build dependencies
 COPY package*.json ./
