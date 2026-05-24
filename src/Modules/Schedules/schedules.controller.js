@@ -753,11 +753,10 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
   const updateData = { ...otherData };
 
   // If time or type changes, recalculate end time and check conflicts
-  if (start_time || type) {
+  if (start_time) {
     startTime = start_time
       ? normalizeDate(start_time, req.timezone)
       : startTime;
-    sessionType = type || sessionType;
     endTime = getEndTime(
       startTime,
       sessionType,
@@ -767,7 +766,6 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
 
     updateData.start_time = startTime;
     updateData.end_time = endTime;
-    updateData.type = sessionType;
     scheduleUpdated = true;
 
     // Conflict check

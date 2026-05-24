@@ -550,12 +550,12 @@ export const revokePermissionsFromRole = asyncHandler(async (req, res, next) => 
     });
   }
 
-  const exists = await db.findFirst({
+  const exists = await db.findMany({
     model: "rolePermission",
     where: { roleId, permissionId: {in: permissionIds} },
   });
 
-  if (!exists) {
+  if (exists.length === 0) {
     return errorResponse({
       req,
       next,
