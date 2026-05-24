@@ -33,7 +33,7 @@ export const localMulterUpload = ({ customPath = "general", validation = [] } = 
                }
 
                finalPath = basePath;
-               const fullPath = path.resolve(`./src/${basePath}`)
+               const fullPath = path.resolve(`./${basePath}`)
 
 
 

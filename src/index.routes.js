@@ -49,7 +49,7 @@ rootRouter.use("/courses", coursesRouter);
 rootRouter.use("/parent", parentsRouter);
 
 // Static files
-rootRouter.use("/uploads", express.static(path.resolve("./src/uploads")));
+rootRouter.use("/uploads", express.static(path.resolve("./uploads")));
 
 // Root health check
 rootRouter.get("/", (req, res) => {
