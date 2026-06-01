@@ -1,4 +1,23 @@
-import Joi from "joi";
+import Joi from "joi";  
+
+const countryCallingCodePattern = /^\+[1-9]\d{0,2}$/;
+const nationalPhonePattern = /^[0-9]{4,14}$/;
+
+export const validatePhoneNumberWithCountryCode =
+  (codeCountryField) => (value, helpers) => {
+    const codeCountry = value?.[codeCountryField];
+    const phone = value?.phone;
+
+    if (!codeCountry || !phone) return value;
+
+    const totalDigits = codeCountry.replace("+", "").length + phone.length;
+    if (totalDigits > 15) {
+      return helpers.message("VALID_PHONE");
+    }
+
+    return value;
+  };
+
 export const generalFeilds = {
   role_name: Joi.string().min(3).max(15).messages({
     "string.base": "Role name must be a string",
@@ -80,12 +99,12 @@ export const generalFeilds = {
     "any.required": "Country is required",
   }),
   phone: Joi.string()
-    .pattern(new RegExp("^(?:\\+20|0020|0)?1[0125][0-9]{8}$"))
+    .pattern(nationalPhonePattern)
     .messages({
       "string.base": "Phone number must be a string",
       "string.empty": "Phone number cannot be empty",
       "string.pattern.base":
-        "Please enter a valid Egyptian phone number (e.g. 01012345678)",
+        "Phone number must contain 4 to 14 digits without country code, spaces, or symbols",
       "any.required": "Phone number is required",
     }),
   idToken: Joi.string().messages({
@@ -177,10 +196,11 @@ export const generalFeilds = {
       "any.required": "File size is required",
     }),
   },
-  codeCountry: Joi.string().valid("+20", "+966").messages({
+  codeCountry: Joi.string().pattern(countryCallingCodePattern).messages({
     "string.base": "Code country must be a string",
     "string.empty": "Code country cannot be empty",
-    "any.only": "Code country must be either '+20' or '+966'",
+    "string.pattern.base":
+      "Country code must start with + followed by 1 to 3 digits, e.g. +20, +966, +1",
     "any.required": "Code country is required",
   }),
   name_en: Joi.string().messages({

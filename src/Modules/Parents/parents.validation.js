@@ -1,5 +1,8 @@
 import joi from "joi";
-import { generalFeilds } from "../../Utils/GeneralFields/index.js";
+import {
+  generalFeilds,
+  validatePhoneNumberWithCountryCode,
+} from "../../Utils/GeneralFields/index.js";
 
 export const getAllParentsSchema = {
   query: joi.object({
@@ -17,30 +20,36 @@ export const getParentSchema = {
 };
 
 export const createParentSchema = {
-  body: joi.object({
-    name: generalFeilds.name.required(),
-    email: generalFeilds.email.required(),
-    password: generalFeilds.password.required(),
-    phone: generalFeilds.phone.required(),
-    code_country: generalFeilds.codeCountry.required(),
-    active: joi.boolean().optional(),
-    students: joi.array().items(generalFeilds.id).optional(),
-  }).required(),
+  body: joi
+    .object({
+      name: generalFeilds.name.required(),
+      email: generalFeilds.email.required(),
+      password: generalFeilds.password.required(),
+      phone: generalFeilds.phone.required(),
+      code_country: generalFeilds.codeCountry.required(),
+      active: joi.boolean().optional(),
+      students: joi.array().items(generalFeilds.id).optional(),
+    })
+    .custom(validatePhoneNumberWithCountryCode("code_country"))
+    .required(),
 };
 
 export const updateParentSchema = {
   params: joi.object({
     id: generalFeilds.id.required(),
   }),
-  body: joi.object({
-    name: generalFeilds.name,
-    email: generalFeilds.email,
-    password: generalFeilds.password,
-    phone: generalFeilds.phone,
-    code_country: generalFeilds.codeCountry,
-    active: joi.boolean().optional(),
-    students: joi.array().items(generalFeilds.id).optional(),
-  }).required(),
+  body: joi
+    .object({
+      name: generalFeilds.name,
+      email: generalFeilds.email,
+      password: generalFeilds.password,
+      phone: generalFeilds.phone,
+      code_country: generalFeilds.codeCountry,
+      active: joi.boolean().optional(),
+      students: joi.array().items(generalFeilds.id).optional(),
+    })
+    .custom(validatePhoneNumberWithCountryCode("code_country"))
+    .required(),
 };
 
 export const deleteParentSchema = {
@@ -54,4 +63,3 @@ export const studentIdSchema = {
     studentId: generalFeilds.id.required(),
   }),
 };
-

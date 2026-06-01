@@ -1,5 +1,8 @@
 import joi from "joi";
-import { generalFeilds } from "../../Utils/GeneralFields/index.js";
+import {
+  generalFeilds,
+  validatePhoneNumberWithCountryCode,
+} from "../../Utils/GeneralFields/index.js";
 export const getAllTeachersSchema = {
   query: joi.object({
     search: generalFeilds.search,
@@ -43,6 +46,7 @@ export const createTeacherSchema = {
         })
         .optional(),
     })
+    .custom(validatePhoneNumberWithCountryCode("code_country"))
     .required(),
 };
 
@@ -92,5 +96,6 @@ export const updateTeacherSchema = {
       ),
       timezone: joi.string().optional(),
     })
+    .custom(validatePhoneNumberWithCountryCode("code_country"))
     .required(),
 };
