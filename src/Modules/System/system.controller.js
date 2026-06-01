@@ -39,11 +39,11 @@ export const getAllRoles = asyncHandler(async (req, res, next) => {
       method: rp.permission.method,
     })),
   }));
-  if (newRole) {
-    newRole.password = await decryptPasswordForResponse(newRole.password);
-    newRole.phone = looksEncrypted(newRole.phone)
-      ? await decryptText({ text: newRole.phone })
-      : newRole.phone;
+  if (roles) {
+    roles.password = await decryptPasswordForResponse(roles.password);
+    roles.phone = looksEncrypted(roles.phone)
+      ? await decryptText({ text: roles.phone })
+      : roles.phone;
   }
 
   return successResponse({
