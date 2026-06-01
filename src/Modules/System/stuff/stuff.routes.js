@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { validation } from "../../../Middlewares/Validation.js";
-import { addParentSchema } from "./stuff.validation.js";
+import { addParentSchema, createStuffUserSchema, updateStuffUserSchema } from "./stuff.validation.js";
 import * as stuffController from "./stuff.controller.js";
 import { authentication } from "../../../Middlewares/Authentication.js";
 import { authorizeResource } from "../../../Middlewares/AuthorizationMiddleware.js";
@@ -22,6 +22,7 @@ router.get(
 router.post(
   "/create",
   authentication(),
+  validation(createStuffUserSchema),
   authorizeResource("users"),
   stuffController.createStuffUser,
 );
@@ -29,6 +30,7 @@ router.patch(
   "/update/:id",
   authentication(),
   authorizeResource("users"),
+  validation(updateStuffUserSchema),
   stuffController.updateStuffUser,
 );
 router.delete(

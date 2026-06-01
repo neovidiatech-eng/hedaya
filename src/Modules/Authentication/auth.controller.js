@@ -10,8 +10,11 @@ import {
 } from "../../Utils/Response.js";
 import {
   compare,
+  comparePassword,
   decryptText,
+  decryptPasswordForResponse,
   encryptText,
+  encryptPassword,
   hash,
   looksEncrypted,
 } from "../../Utils/Security/index.js";
@@ -75,7 +78,7 @@ export const register = asyncHandler(async (req, res, next) => {
   }
 
   // 2. Preparation (Hashing, Encryption, OTP)
-  const hashedPassword = await hash({ password });
+  const encryptedPassword = encryptPassword({ password });
   const encryptedPhone = encryptText({ text: phone });
   const otp = generateOtp();
   const hashedOtp = await hash({ password: otp });
@@ -104,7 +107,7 @@ export const register = asyncHandler(async (req, res, next) => {
       data: {
         name,
         email,
-        password: hashedPassword,
+        password: encryptedPassword,
         phone: encryptedPhone,
         code_country: codeCountry,
         timezone,
@@ -118,7 +121,7 @@ export const register = asyncHandler(async (req, res, next) => {
       JSON.stringify({
         name,
         email,
-        password: hashedPassword,
+        password: encryptedPassword,
         phone: encryptedPhone,
         code_country: codeCountry,
         birth_date,
@@ -198,7 +201,10 @@ export const login = asyncHandler(async (req, res, next) => {
   if (!user || !user.password) {
     return errorResponse({ req, next, message: "USER_NOT_FOUND_OR_UNCONFIRMED", status: 404 });
   }
-  const matchedPassword = await compare({ password, hash: user.password });
+  const matchedPassword = await comparePassword({
+    password,
+    storedPassword: user.password,
+  });
   if (!matchedPassword) {
     return errorResponse({
       req,
@@ -417,11 +423,11 @@ export const resetPassword = asyncHandler(async (req, res, next) => {
     return errorResponse({ req, next, message: "INVALID_OTP", status: 401 });
   }
 
-  const hashedPassword = await hash({ password });
+  const encryptedPassword = encryptPassword({ password });
   const user = await db.updateOne({
     model: "user",
     where: { email },
-    data: { password: hashedPassword },
+    data: { password: encryptedPassword },
   });
   await redis.del(`${email}_otp_forget_password`);
   await redis.del(`${email}_otp_forget_attempts`);
@@ -662,7 +668,7 @@ export const logout = asyncHandler(async (req, res, next) => {
 
 export const getLogs = asyncHandler(async (req, res, next) => {
 
-  const logs=await db.findMany({
+  const logs = await db.findMany({
     model: "auth_log",
     include: {
       user: true,
@@ -672,10 +678,25 @@ export const getLogs = asyncHandler(async (req, res, next) => {
     },
   });
 
+  const logsData = await Promise.all(
+    logs.map(async (log) => ({
+      ...log,
+      user: log.user
+        ? {
+            ...log.user,
+            password: await decryptPasswordForResponse(log.user.password),
+            phone: looksEncrypted(log.user.phone)
+              ? await decryptText({ text: log.user.phone })
+              : log.user.phone,
+          }
+        : log.user,
+    })),
+  );
+
   return successResponse({
     res,
     req,
-    data:logs,
+    data: logsData,
     status: 200,
     message: "FETCH_SUCCESS",
   });

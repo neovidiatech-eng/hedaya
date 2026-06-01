@@ -5,7 +5,13 @@ import {
 } from "../../../Utils/Response.js";
 import * as db from "../../../database/dbService.js";
 import { ensureExists } from "../../../database/genericService.js";
-import { encryptText, hash } from "../../../Utils/Security/index.js";
+import {
+  decryptPasswordForResponse,
+  decryptText,
+  encryptPassword,
+  encryptText,
+  looksEncrypted,
+} from "../../../Utils/Security/index.js";
 import { redis } from "../../../Utils/Radis/Connection.js";
 
 export const getAllStuff = asyncHandler(async (req, res, next) => {
@@ -32,11 +38,26 @@ export const getAllStuff = asyncHandler(async (req, res, next) => {
     },
   });
 
+  const stuffData = await Promise.all(
+    stuff.map(async (item) => ({
+      ...item,
+      user: item.user
+        ? {
+            ...item.user,
+            password: await decryptPasswordForResponse(item.user.password),
+            phone: looksEncrypted(item.user.phone)
+              ? await decryptText({ text: item.user.phone })
+              : item.user.phone,
+          }
+        : item.user,
+    })),
+  );
+
   return successResponse({
     res,
     req,
     message: "FETCH_SUCCESS",
-    data: { stuff, pagination },
+    data: { stuff: stuffData, pagination },
   });
 });
 
@@ -63,6 +84,13 @@ export const getStuffById = asyncHandler(async (req, res, next) => {
   const permissions =
     stuff.role?.rolePermissions.map((rp) => rp.permission) || [];
 
+  if (stuff?.user) {
+    stuff.user.password = await decryptPasswordForResponse(stuff.user.password);
+    stuff.user.phone = looksEncrypted(stuff.user.phone)
+      ? await decryptText({ text: stuff.user.phone })
+      : stuff.user.phone;
+  }
+
   return successResponse({
     res,
     req,
@@ -75,7 +103,9 @@ export const getStuffById = asyncHandler(async (req, res, next) => {
 });
 
 export const createStuffUser = asyncHandler(async (req, res, next) => {
-  const { name, email, password, phone, codeCountry, roleId } = req.body;
+  const { name, email, password, phone, codeCountry, code_country, roleId } =
+    req.body;
+  const userCodeCountry = codeCountry || code_country;
 
   const [checkUserByEmail, checkUserByPhone, checkRole] = await Promise.all([
     db.findOne({ model: "user", where: { email } }),
@@ -92,17 +122,17 @@ export const createStuffUser = asyncHandler(async (req, res, next) => {
   if (roleId && !checkRole)
     return errorResponse({ req, next, message: "ROLE_NOT_FOUND", status: 404 });
 
-  const hashedPassword = await hash({ password });
+  const encryptedPassword = encryptPassword({ password });
 
   const result = await db.transaction([
     db.create({
       model: "user",
       data: {
         email,
-        password: hashedPassword,
+        password: encryptedPassword,
         name,
         phone,
-        code_country: codeCountry,
+        code_country: userCodeCountry,
         roleId: roleId || null,
         status: "active",
         confirmAt: new Date(),
@@ -121,6 +151,15 @@ export const createStuffUser = asyncHandler(async (req, res, next) => {
     include: { user: true, role: true },
   });
 
+  if (newStuff?.user) {
+    newStuff.user.password = await decryptPasswordForResponse(
+      newStuff.user.password,
+    );
+    newStuff.user.phone = looksEncrypted(newStuff.user.phone)
+      ? await decryptText({ text: newStuff.user.phone })
+      : newStuff.user.phone;
+  }
+
   return successResponse({
     res,
     req,
@@ -132,7 +171,7 @@ export const createStuffUser = asyncHandler(async (req, res, next) => {
 
 export const updateStuffUser = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
-  const { name, email, phone, code_country, roleId } = req.body;
+  const { name, email, password, phone, code_country, roleId } = req.body;
 
   const stuff = await ensureExists({
     model: "stuff",
@@ -152,14 +191,24 @@ export const updateStuffUser = asyncHandler(async (req, res, next) => {
       return errorResponse({ req, next, message: "PHONE_EXISTS", status: 400 });
   }
 
+  const encryptedPassword = password ? encryptPassword({ password }) : null;
+
   // Update user data
-  if (name || email || phone || code_country || roleId !== undefined) {
+  if (
+    name ||
+    email ||
+    encryptedPassword ||
+    phone ||
+    code_country ||
+    roleId !== undefined
+  ) {
     await db.updateOne({
       model: "user",
       where: { id: stuff.user_id },
       data: {
         ...(name && { name }),
         ...(email && { email }),
+        ...(encryptedPassword && { password: encryptedPassword }),
         ...(phone && { phone }),
         ...(code_country && { code_country }),
         ...(roleId !== undefined && { roleId }),
@@ -180,6 +229,15 @@ export const updateStuffUser = asyncHandler(async (req, res, next) => {
       role: true,
     },
   });
+
+  if (updatedStuff?.user) {
+    updatedStuff.user.password = await decryptPasswordForResponse(
+      updatedStuff.user.password,
+    );
+    updatedStuff.user.phone = looksEncrypted(updatedStuff.user.phone)
+      ? await decryptText({ text: updatedStuff.user.phone })
+      : updatedStuff.user.phone;
+  }
 
   return successResponse({
     res,
@@ -237,7 +295,7 @@ export const registerParent = asyncHandler(async (req, res, next) => {
     return errorResponse({ req, next, message: "PHONE_EXISTS", status: 400 });
   }
 
-  const hashedPassword = await hash({ password });
+  const encryptedPassword = encryptPassword({ password });
   const encryptedPhone = encryptText({ text: phone });
 
   await db.transaction(async (tx) => {
@@ -246,7 +304,7 @@ export const registerParent = asyncHandler(async (req, res, next) => {
       data: {
         name,
         email,
-        password: hashedPassword,
+        password: encryptedPassword,
         phone: encryptedPhone,
         code_country: codeCountry,
         timezone,

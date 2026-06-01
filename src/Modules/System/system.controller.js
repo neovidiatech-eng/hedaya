@@ -6,6 +6,11 @@ import {
 import * as db from "../../database/dbService.js";
 import { getNowUTC } from "../../Utils/Date/time.js";
 import { rbacCache } from "../../Utils/RBAC/cache.js";
+import {
+  decryptPasswordForResponse,
+  decryptText,
+  looksEncrypted,
+} from "../../Utils/Security/index.js";
 
 export const getAllRoles = asyncHandler(async (req, res, next) => {
   const { search } = req.query;
@@ -34,6 +39,13 @@ export const getAllRoles = asyncHandler(async (req, res, next) => {
       method: rp.permission.method,
     })),
   }));
+  if (newRole) {
+    newRole.password = await decryptPasswordForResponse(newRole.password);
+    newRole.phone = looksEncrypted(newRole.phone)
+      ? await decryptText({ text: newRole.phone })
+      : newRole.phone;
+  }
+
   return successResponse({
     res,
     req,

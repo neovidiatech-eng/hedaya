@@ -1,7 +1,13 @@
 import { asyncHandler, successResponse, errorResponse } from "../../Utils/Response.js";
 import * as db from "../../database/dbService.js";
 import { ensureExists } from "../../database/genericService.js";
-import { hash, encryptText, decryptText, looksEncrypted } from "../../Utils/Security/index.js";
+import {
+  decryptPasswordForResponse,
+  decryptText,
+  encryptPassword,
+  encryptText,
+  looksEncrypted,
+} from "../../Utils/Security/index.js";
 
 // GET /parents
 export const getAllParents = asyncHandler(async (req, res, next) => {
@@ -63,6 +69,7 @@ export const getAllParents = asyncHandler(async (req, res, next) => {
         id: parent.id,
         name: parent.name,
         email: parent.email,
+        password: await decryptPasswordForResponse(parent.password),
         phone: phone,
         code_country: parent.code_country,
         status: parent.status,
@@ -145,6 +152,7 @@ export const getParent = asyncHandler(async (req, res, next) => {
     id: parent.id,
     name: parent.name,
     email: parent.email,
+    password: await decryptPasswordForResponse(parent.password),
     phone: phone,
     code_country: parent.code_country,
     status: parent.status,
@@ -195,7 +203,7 @@ export const createParent = asyncHandler(async (req, res, next) => {
     return errorResponse({ req, next, message: "ROLE_NOT_FOUND", status: 404 });
   }
 
-  const hashedPassword = await hash({ password });
+  const encryptedPassword = encryptPassword({ password });
   const encryptedPhone = encryptText({ text: phone });
 
   let newParent;
@@ -206,7 +214,7 @@ export const createParent = asyncHandler(async (req, res, next) => {
       data: {
         name,
         email,
-        password: hashedPassword,
+        password: encryptedPassword,
         phone: encryptedPhone,
         code_country,
         roleId: parentRole.id,
@@ -272,6 +280,7 @@ export const createParent = asyncHandler(async (req, res, next) => {
       id: createdParent.id,
       name: createdParent.name,
       email: createdParent.email,
+      password: await decryptPasswordForResponse(createdParent.password),
       phone: phoneDecrypted,
       code_country: createdParent.code_country,
       status: createdParent.status,
@@ -310,9 +319,9 @@ export const updateParent = asyncHandler(async (req, res, next) => {
     where: { id, roleId: parentRole.id },
   });
 
-  let hashedPassword;
+  let encryptedPassword;
   if (password) {
-    hashedPassword = await hash({ password });
+    encryptedPassword = encryptPassword({ password });
   }
 
   // Handle unique constraints
@@ -349,7 +358,7 @@ export const updateParent = asyncHandler(async (req, res, next) => {
       data: {
         ...(name && { name }),
         ...(email && { email }),
-        ...(hashedPassword && { password: hashedPassword }),
+        ...(encryptedPassword && { password: encryptedPassword }),
         ...(encryptedPhone && { phone: encryptedPhone }),
         ...(code_country && { code_country }),
         ...(active !== undefined && { status: active === true ? "active" : "blocked" }),
@@ -421,6 +430,7 @@ export const updateParent = asyncHandler(async (req, res, next) => {
       id: parentDetails.id,
       name: parentDetails.name,
       email: parentDetails.email,
+      password: await decryptPasswordForResponse(parentDetails.password),
       phone: phoneDecrypted,
       code_country: parentDetails.code_country,
       status: parentDetails.status,

@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import pg from "pg";
 import dotenv from "dotenv";
-import bcrypt from "bcryptjs";
+import CryptoJS from "crypto-js";
 
 dotenv.config();
 
@@ -40,8 +40,6 @@ export const stuffData = [
 export async function seedStuff() {
   console.log("Start seeding stuff...");
 
-  const salt = await bcrypt.genSalt(10);
-
   for (const item of stuffData) {
     const role = await prisma.role.findUnique({
       where: { name: item.roleName },
@@ -54,7 +52,10 @@ export async function seedStuff() {
       continue;
     }
 
-    const hashedPassword = await bcrypt.hash(item.password, salt);
+    const encryptedPassword = CryptoJS.AES.encrypt(
+      item.password,
+      process.env.ENCRYPT_KEY,
+    ).toString();
 
     // Find or create user first
     const user = await prisma.user.upsert({
@@ -67,7 +68,7 @@ export async function seedStuff() {
       },
       create: {
         email: item.email,
-        password: hashedPassword,
+        password: encryptedPassword,
         name: item.name,
         phone: item.phone,
         code_country: item.code_country,
