@@ -360,6 +360,15 @@ export const updateStudent = asyncHandler(async (req, res, next) => {
     include: { user: true, plan: true },
   });
 
+  if (updatedStudent?.user) {
+    updatedStudent.user.password = await decryptPasswordForResponse(
+      updatedStudent.user.password,
+    );
+    updatedStudent.user.phone = looksEncrypted(updatedStudent.user.phone)
+      ? await decryptText({ text: updatedStudent.user.phone })
+      : updatedStudent.user.phone;
+  }
+
   return successResponse({
     res,
     req,

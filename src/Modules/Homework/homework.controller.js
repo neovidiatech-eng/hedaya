@@ -3,6 +3,7 @@ import {
   errorResponse,
   successResponse,
 } from "../../Utils/Response.js";
+import { decryptUserForResponse } from "../../Utils/Security/index.js";
 import * as db from "../../database/dbService.js";
 
 export const createHomework = asyncHandler(async (req, res, next) => {
@@ -148,6 +149,11 @@ export const getHomework = asyncHandler(async (req, res, next) => {
     return errorResponse({ req, next, message: "HOMEWORK_NOT_FOUND", status: 404 });
   }
 
+  await Promise.all([
+    decryptUserForResponse(homework.student?.user),
+    decryptUserForResponse(homework.teacher?.user),
+  ]);
+
   return successResponse({ res, req, message: "FETCH_SUCCESS", data: homework, status: 200 });
 });
 export const getStudentHomework = asyncHandler(async (req, res, next) => {
@@ -170,6 +176,13 @@ export const getStudentHomework = asyncHandler(async (req, res, next) => {
   if (!homework) {
     return errorResponse({ req, next, message: "HOMEWORK_NOT_FOUND", status: 404 });
   }
+
+  await Promise.all(
+    homework.flatMap((item) => [
+      decryptUserForResponse(item.student?.user),
+      decryptUserForResponse(item.teacher?.user),
+    ]),
+  );
 
   return successResponse({ res, req, message: "FETCH_SUCCESS", data: homework, status: 200 });
 });

@@ -210,15 +210,6 @@ export const createTeacher = asyncHandler(async (req, res, next) => {
     };
   });
 
-  if (teacher?.user) {
-    teacher.user.password = await decryptPasswordForResponse(
-      teacher.user.password,
-    );
-    teacher.user.phone = looksEncrypted(teacher.user.phone)
-      ? await decryptText({ text: teacher.user.phone })
-      : teacher.user.phone;
-  }
-
   return successResponse({
     res,
     req,
@@ -242,6 +233,15 @@ export const getTeacher = asyncHandler(async (req, res, next) => {
     },
     message: "TEACHER_NOT_FOUND",
   });
+
+  if (teacher?.user) {
+    teacher.user.password = await decryptPasswordForResponse(
+      teacher.user.password,
+    );
+    teacher.user.phone = looksEncrypted(teacher.user.phone)
+      ? await decryptText({ text: teacher.user.phone })
+      : teacher.user.phone;
+  }
 
   return successResponse({
     res,

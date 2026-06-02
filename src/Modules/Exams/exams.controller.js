@@ -3,6 +3,7 @@ import {
   errorResponse,
   successResponse,
 } from "../../Utils/Response.js";
+import { decryptUserForResponse } from "../../Utils/Security/index.js";
 import * as db from "../../database/dbService.js";
 
 export const createExam = asyncHandler(async (req, res, next) => {
@@ -152,6 +153,11 @@ export const getExam = asyncHandler(async (req, res, next) => {
     return errorResponse({ req, next, message: "EXAM_NOT_FOUND", status: 404 });
   }
 
+  await Promise.all([
+    decryptUserForResponse(exam.student?.user),
+    decryptUserForResponse(exam.teacher?.user),
+  ]);
+
   return successResponse({ res, req, message: "FETCH_SUCCESS", data: exam, status: 200 });
 });
 export const getStudentExams = asyncHandler(async (req, res, next) => {
@@ -179,6 +185,13 @@ export const getStudentExams = asyncHandler(async (req, res, next) => {
   if (!exams) {
     return errorResponse({ req, next, message: "EXAM_NOT_FOUND", status: 404 });
   }
+
+  await Promise.all(
+    exams.flatMap((exam) => [
+      decryptUserForResponse(exam.student?.user),
+      decryptUserForResponse(exam.teacher?.user),
+    ]),
+  );
 
   return successResponse({ res, req, message: "FETCH_SUCCESS", data: exams, status: 200 });
 });

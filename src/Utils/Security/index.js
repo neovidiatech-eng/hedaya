@@ -60,3 +60,19 @@ export const decryptPasswordForResponse = async (storedPassword) => {
   if (!storedPassword || !looksEncrypted(storedPassword)) return null;
   return await decryptText({ text: storedPassword });
 };
+
+export const decryptUserForResponse = async (user) => {
+  if (!user) return user;
+
+  if (Object.prototype.hasOwnProperty.call(user, "password")) {
+    user.password = await decryptPasswordForResponse(user.password);
+  }
+
+  if (Object.prototype.hasOwnProperty.call(user, "phone")) {
+    user.phone = looksEncrypted(user.phone)
+      ? await decryptText({ text: user.phone })
+      : user.phone;
+  }
+
+  return user;
+};
