@@ -40,10 +40,10 @@ export const register = asyncHandler(async (req, res, next) => {
   } = req.body;
 
   // 1. Initial validations (Check existence outside transaction to keep it short)
-  const [checkUserByEmail, checkUserByPhone] = await Promise.all([
-    db.findFirst({ model: "user", where: { email } }),
-    db.findFirst({ model: "user", where: { phone } }),
-  ]);
+  const checkUserByEmail = await db.findFirst({
+    model: "user",
+    where: { email },
+  });
 
   const userRole = await db.findFirst({
     model: "role",
@@ -56,10 +56,6 @@ export const register = asyncHandler(async (req, res, next) => {
 
   if (checkUserByEmail) {
     return errorResponse({ req, next, message: "EMAIL_EXISTS", status: 400 });
-  }
-
-  if (checkUserByPhone) {
-    return errorResponse({ req, next, message: "PHONE_EXISTS", status: 400 });
   }
 
   if (plan_id) {
