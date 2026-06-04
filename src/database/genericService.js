@@ -9,7 +9,7 @@ import * as db from "./dbService.js";
  * @param {Object} [options.include] - Prisma include clause
  * @returns {Promise<Object>} The found entity
  */
-export const ensureExists = async ({ model, where, message = "Resource not found", messageParams = {}, include, isMessageKey = true }) => {
+export const ensureExists = async ({ model, where, message = "RESOURCE_NOT_FOUND", messageParams = {}, include, isMessageKey = true }) => {
   const item = await db.findOne({ model, where, include });
   if (!item) {
     const error = new Error(message);

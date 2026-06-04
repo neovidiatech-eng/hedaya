@@ -3,6 +3,7 @@ import {
   successResponse,
   errorResponse,
 } from "../../Utils/Response.js";
+import { getMessage } from "../../Utils/i18n.js";
 import {
   checkExist,
   getDatesBetweenUTC,
@@ -1361,10 +1362,14 @@ async function finalizeSession(scheduleId, t) {
       model: "notification",
       data: {
         userId: session.student.user_id,
-        title: t ? t("NOTIFICATION_SESSION_MISSED_TITLE") : "Session Missed",
+        title: t
+          ? t("NOTIFICATION_SESSION_MISSED_TITLE")
+          : getMessage("NOTIFICATION_SESSION_MISSED_TITLE", "en"),
         message: t
           ? t("NOTIFICATION_SESSION_MISSED_MSG", { title: session.title })
-          : `The session ${session.title} was marked as missed.`,
+          : getMessage("NOTIFICATION_SESSION_MISSED_MSG", "en", {
+              title: session.title,
+            }),
         type: "session_missed",
       },
     });

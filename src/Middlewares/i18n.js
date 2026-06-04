@@ -5,7 +5,7 @@
  * 2. Accept-Language header
  * 3. Fallback to "en"
  */
-import { getMessage } from "../Utils/i18n.js";
+import { getMessage, normalizeLang } from "../Utils/i18n.js";
 
 export const langMiddleware = (req, res, next) => {
   // 1. Check if user profile has a language preference (populated by auth middleware)
@@ -21,10 +21,7 @@ export const langMiddleware = (req, res, next) => {
   }
 
   // 3. Supported languages check
-  const supportedLangs = ["en", "ar"];
-  if (!supportedLangs.includes(lang)) {
-    lang = "en";
-  }
+  lang = normalizeLang(lang);
 
   // Attach to request object
   req.lang = lang;

@@ -19,7 +19,8 @@ export const checkExist = async ({ model, where, next }) => {
     return errorResponse({
       next,
       status: 404,
-      message: `${model} not found`,
+      message: "MODEL_NOT_FOUND",
+      messageParams: { model },
     });
   }
 
@@ -36,7 +37,8 @@ export const checkConflict = async ({ model, where, next }) => {
     return errorResponse({
       next,
       status: 400,
-      message: `${model} already exists`,
+      message: "MODEL_ALREADY_EXISTS",
+      messageParams: { model },
     });
   }
 

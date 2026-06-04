@@ -3,7 +3,9 @@ import prisma from "./Connection.db.js";
 const getClient = (model, prismaClient = prisma) => {
   const client = prismaClient[model];
   if (!client) {
-    throw new Error(`Model Not Found: "${model}"`);
+    const error = new Error("MODEL_NOT_FOUND");
+    error.messageParams = { model };
+    throw error;
   }
   return client;
 };

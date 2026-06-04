@@ -2,6 +2,11 @@ import * as ChatService from "../../Modules/chat/chat.service.js";
 import * as RedisUtils from "../Redis/index.js";
 import * as db from "../../database/dbService.js";
 
+const emitError = (socket, key, params = {}) =>
+  socket.emit("error", {
+    message: socket.t ? socket.t(key, params) : key,
+  });
+
 /**
  * Socket.io Logic
  * Handles real-time communication events
@@ -38,7 +43,7 @@ export const init_io = (io) => {
           // Check participation
           const canAccess = await ChatService.isParticipant(conversationId, user.id, user.role.name);
           if (!canAccess) {
-            return socket.emit("error", { message: "Unauthorized access to this conversation" });
+            return emitError(socket, "CHAT_CONVERSATION_ACCESS_DENIED");
           }
 
           // Join the room
@@ -52,7 +57,7 @@ export const init_io = (io) => {
           
           console.log(`User ${user.name} opened conversation ${conversationId}`);
         } catch (error) {
-          socket.emit("error", { message: error.message });
+          emitError(socket, error.cause ? error.message : "INTERNAL_SERVER_ERROR");
         }
       });
 
@@ -64,19 +69,19 @@ export const init_io = (io) => {
         try {
           // Rule: Admin is read-only
           if (user.role.name === "admin") {
-            return socket.emit("error", { message: "Admins cannot send messages" });
+            return emitError(socket, "CHAT_ADMIN_READ_ONLY");
           }
 
           // Rule: Rate limiting (30 msgs/min)
           const limited = await RedisUtils.isRateLimited(user.id);
           if (limited) {
-            return socket.emit("error", { message: "Rate limit exceeded. Please wait a minute." });
+            return emitError(socket, "CHAT_RATE_LIMIT");
           }
 
           // Check participation
           const canAccess = await ChatService.isParticipant(conversationId, user.id, user.role.name);
           if (!canAccess) {
-            return socket.emit("error", { message: "You are not a participant in this conversation" });
+            return emitError(socket, "CHAT_NOT_PARTICIPANT");
           }
 
           // Save to DB
@@ -86,7 +91,7 @@ export const init_io = (io) => {
           io.to(`conv_${conversationId}`).emit("message:new", message);
 
         } catch (error) {
-          socket.emit("error", { message: error.message });
+          emitError(socket, error.cause ? error.message : "INTERNAL_SERVER_ERROR");
         }
       });
 

@@ -2,6 +2,12 @@ import en from "../Locales/en.json" with { type: "json" };
 import ar from "../Locales/ar.json" with { type: "json" };
 
 const locales = { en, ar };
+export const supportedLangs = Object.keys(locales);
+
+export const normalizeLang = (lang = "en") => {
+  const normalized = String(lang).split(",")[0].split("-")[0].toLowerCase();
+  return supportedLangs.includes(normalized) ? normalized : "en";
+};
 
 /**
  * Get translated message for a given key and language
@@ -11,6 +17,8 @@ const locales = { en, ar };
  * @returns {string} - Translated and formatted message
  */
 export const getMessage = (key, lang = "en", params = {}) => {
+  lang = normalizeLang(lang);
+
   // Use "en" as ultimate fallback if language is not supported
   const language = locales[lang] || locales["en"];
 
@@ -32,4 +40,4 @@ export const getMessage = (key, lang = "en", params = {}) => {
  * @param {string} lang 
  * @returns {string} "rtl" | "ltr"
  */
-export const getDir = (lang) => (lang === "ar" ? "rtl" : "ltr");
+export const getDir = (lang) => (normalizeLang(lang) === "ar" ? "rtl" : "ltr");

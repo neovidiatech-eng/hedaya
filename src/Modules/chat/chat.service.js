@@ -5,6 +5,9 @@ import {
   incrementUnreadCount,
 } from "../../Utils/Redis/index.js";
 
+const serviceError = (message, status = 400) =>
+  Object.assign(new Error(message), { cause: status });
+
 /**
  * Chat Service
  * Handles business logic for conversations and messages
@@ -35,7 +38,7 @@ export const createConversation = async (teacherId, studentId, currentUser) => {
     ]);
 
     if (!teacher || !student) {
-      throw new Error("Teacher or Student not found");
+      throw serviceError("TEACHER_OR_STUDENT_NOT_FOUND", 404);
     }
 
     // 2. Validate relationship via schedule
@@ -48,7 +51,7 @@ export const createConversation = async (teacherId, studentId, currentUser) => {
     });
 
     if (scheduleCount === 0) {
-      throw new Error("No scheduled sessions found between these parties");
+      throw serviceError("CHAT_NO_SCHEDULED_SESSIONS", 404);
     }
 
     // 3. Check if conversation already exists
@@ -116,7 +119,7 @@ export const getConversations = async (userId, role) => {
     } else if (role === "admin") {
       whereClause = {}; // Admin sees all
     } else {
-      throw new Error("Unauthorized role");
+      throw serviceError("UNAUTHORIZED", 403);
     }
 
     const conversations = await db.findMany({
@@ -235,10 +238,10 @@ export const saveMessage = async (conversationId, senderId, content) => {
   try {
     // 1. Validation
     if (!content || content.trim().length === 0) {
-      throw new Error("Message content cannot be empty");
+      throw serviceError("CHAT_MESSAGE_EMPTY", 400);
     }
     if (content.length > 1000) {
-      throw new Error("Message content cannot exceed 1000 characters");
+      throw serviceError("CHAT_MESSAGE_TOO_LONG", 400);
     }
 
     // 2. Save to DB

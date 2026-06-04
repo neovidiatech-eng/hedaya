@@ -1,6 +1,14 @@
 import * as ChatService from "./chat.service.js";
 import { successResponse, errorResponse } from "../../Utils/Response.js";
 
+const handleChatError = (req, next, error) =>
+  errorResponse({
+    req,
+    next,
+    status: typeof error.cause === "number" ? error.cause : 500,
+    message: typeof error.cause === "number" ? error.message : "INTERNAL_SERVER_ERROR",
+  });
+
 /**
  * Chat Controller
  * Handles HTTP requests for the chat system
@@ -21,9 +29,7 @@ export const createConversation = async (req, res, next) => {
         req,
         next,
         status: 403,
-        message: "You can only create conversations for yourself",
-        messageParams: {},
-        details: null,
+        message: "CHAT_SELF_CONVERSATION_ONLY",
       });
     }
     if (currentUser.role.name === "teacher" && currentUser.teacher.id !== teacherId) {
@@ -31,9 +37,7 @@ export const createConversation = async (req, res, next) => {
         req,
         next,
         status: 403,
-        message: "You can only create conversations for yourself",
-        messageParams: {},
-        details: null,
+        message: "CHAT_SELF_CONVERSATION_ONLY",
       });
     }
 
@@ -42,19 +46,12 @@ export const createConversation = async (req, res, next) => {
       res,
       req,
       status: 201,
-      message: "Conversation created successfully",
+      message: "CHAT_CONVERSATION_CREATED",
       data: conversation,
     });
   } catch (error) {
     console.error("ChatController (createConversation) Error:", error);
-    return errorResponse({
-      req,
-      next,
-      status: 500,
-      message: "Internal Server Error",
-      messageParams: {},
-      details: null,
-    });
+    return handleChatError(req, next, error);
   }
 };
 
@@ -72,19 +69,12 @@ export const getConversations = async (req, res, next) => {
       res,
       req,
       status: 200,
-      message: "Conversations fetched successfully",
+      message: "CHAT_CONVERSATIONS_FETCHED",
       data: conversations,
     });
   } catch (error) {
     console.error("ChatController (getConversations) Error:", error);
-    return errorResponse({
-      req,
-      next,
-      status: 500,
-      message: "Internal Server Error",
-      messageParams: {},
-      details: null,
-    });
+    return handleChatError(req, next, error);
   }
 };
 
@@ -106,9 +96,7 @@ export const getMessages = async (req, res, next) => {
         req,
         next,
         status: 403,
-        message: "Unauthorized access to this conversation",
-        messageParams: {},
-        details: null,
+        message: "CHAT_CONVERSATION_ACCESS_DENIED",
       });
     }
 
@@ -123,18 +111,11 @@ export const getMessages = async (req, res, next) => {
       res,
       req,
       status: 200,
-      message: "Messages fetched successfully",
+      message: "CHAT_MESSAGES_FETCHED",
       data: messages,
     });
   } catch (error) {
     console.error("ChatController (getMessages) Error:", error);
-    return errorResponse({
-      req,
-      next,
-      status: 500,
-      message: "Internal Server Error",
-      messageParams: {},
-      details: null,
-    });
+    return handleChatError(req, next, error);
   }
 };

@@ -2,6 +2,7 @@ import multer from "multer";
 import { customAlphabet } from "nanoid";
 import path from "node:path"
 import fs from "node:fs"
+import { getMessage } from "../i18n.js";
 
 export const fileValidation = {
      image: ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/webp"],
@@ -19,7 +20,7 @@ export const localMulterUpload = ({ customPath = "general", validation = [] } = 
           if (validation.includes(file.mimetype)) {
                return cb(null, true)
           }
-          return cb(new Error("inVaild File Format"), false)
+          return cb(new Error(getMessage("MULTER_INVALID_FILE_FORMAT", req?.lang)), false)
 
      }
 
