@@ -1,4 +1,4 @@
-import { getNowUTC } from "../../../Utils/Date/time.js";
+import { formatSchedules, getNowUTC } from "../../../Utils/Date/time.js";
 import {
   asyncHandler,
   errorResponse,
@@ -105,6 +105,9 @@ export const getProfile = asyncHandler(async (req, res, next) => {
       status: s.status,
       startTime: s.start_time,
       endTime: s.end_time,
+      display_start_time: formatSchedules(s, req.timezone).display_start_time,
+      display_end_time: formatSchedules(s, req.timezone).display_end_time,
+      display_timezone: req.timezone,
       isRecurring: s.is_recurring,
       link: s.link,
       notes: s.notes,
@@ -242,6 +245,9 @@ export const getDashboardStats = asyncHandler(async (req, res, next) => {
         status: s.status,
         startTime: s.start_time,
         endTime: s.end_time,
+        display_start_time: formatSchedules(s, req.timezone).display_start_time,
+        display_end_time: formatSchedules(s, req.timezone).display_end_time,
+        display_timezone: req.timezone,
         isRecurring: s.is_recurring,
         link: s.link,
         notes: s.notes,
@@ -264,7 +270,7 @@ export const getDashboardStats = asyncHandler(async (req, res, next) => {
         },
       })),
 
-      todaySchedules,
+      todaySchedules: formatSchedules(todaySchedules, req.timezone),
       students, // ✅ الطلاب الـ unique
     },
     status: 200,

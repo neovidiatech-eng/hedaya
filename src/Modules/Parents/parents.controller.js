@@ -8,6 +8,7 @@ import {
   encryptText,
   looksEncrypted,
 } from "../../Utils/Security/index.js";
+import { formatSchedules } from "../../Utils/Date/time.js";
 
 // GET /parents
 export const getAllParents = asyncHandler(async (req, res, next) => {
@@ -592,7 +593,7 @@ export const getStudentSessions = asyncHandler(async (req, res, next) => {
     req,
     res,
     status: 200,
-    data: sessions,
+    data: formatSchedules(sessions, req.timezone),
   });
 });
 
@@ -617,11 +618,18 @@ export const getStudentAttendance = asyncHandler(async (req, res, next) => {
     orderBy: { createdAt: "desc" },
   });
 
+  const formattedAttendanceLogs = attendanceLogs.map((log) => ({
+    ...log,
+    schedule: log.schedule
+      ? formatSchedules(log.schedule, req.timezone)
+      : log.schedule,
+  }));
+
   return successResponse({
     req,
     res,
     status: 200,
-    data: attendanceLogs,
+    data: formattedAttendanceLogs,
   });
 });
 

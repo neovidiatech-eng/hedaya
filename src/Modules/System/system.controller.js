@@ -4,7 +4,7 @@ import {
   successResponse,
 } from "../../Utils/Response.js";
 import * as db from "../../database/dbService.js";
-import { getNowUTC } from "../../Utils/Date/time.js";
+import { formatSchedules, getNowUTC } from "../../Utils/Date/time.js";
 import { rbacCache } from "../../Utils/RBAC/cache.js";
 import {
   decryptPasswordForResponse,
@@ -377,6 +377,9 @@ export const getDashboard = asyncHandler(async (req, res, next) => {
         title: s.title,
         subject: s.subject?.name_en || "Subject",
         time: s.start_time,
+        display_start_time: formatSchedules(s, req.timezone).display_start_time,
+        display_end_time: formatSchedules(s, req.timezone).display_end_time,
+        display_timezone: req.timezone,
         teacher: s.teacher?.user?.name || "Teacher",
         student: s.student?.user?.name || "Student",
       })),

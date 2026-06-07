@@ -1,6 +1,6 @@
 import { asyncHandler, successResponse, errorResponse } from "../../Utils/Response.js";
 import * as db from "../../database/dbService.js";
-import { getNowUTC, toUTC } from "../../Utils/Date/time.js";
+import { formatSchedules, getNowUTC, toUTC } from "../../Utils/Date/time.js";
 
 export const getCalendar = asyncHandler(async (req, res, next) => {
   const { startDate, endDate } = req.query;
@@ -36,7 +36,12 @@ export const getCalendar = asyncHandler(async (req, res, next) => {
   return successResponse({
     res,
     req,
-    data: { sessions, count, planned, toDaySessions },
+    data: {
+      sessions: formatSchedules(sessions, req.timezone),
+      count,
+      planned,
+      toDaySessions: formatSchedules(toDaySessions, req.timezone),
+    },
     status: 200,
     message: "FETCH_SUCCESS",
   });
@@ -227,7 +232,12 @@ export const getStudentCalendar = asyncHandler(async (req, res, next) => {
   return successResponse({
     res,
     req,
-    data: { sessions, count, planned, toDaySessions },
+    data: {
+      sessions: formatSchedules(sessions, req.timezone),
+      count,
+      planned,
+      toDaySessions: formatSchedules(toDaySessions, req.timezone),
+    },
     status: 200,
     message: "FETCH_SUCCESS",
   });
@@ -419,7 +429,12 @@ export const getTeacherCalendar = asyncHandler(async (req, res, next) => {
   return successResponse({
     res,
     req,
-    data: { sessions, count, planned, toDaySessions },
+    data: {
+      sessions: formatSchedules(sessions, req.timezone),
+      count,
+      planned,
+      toDaySessions: formatSchedules(toDaySessions, req.timezone),
+    },
     status: 200,
     message: "FETCH_SUCCESS",
   });
@@ -427,8 +442,8 @@ export const getTeacherCalendar = asyncHandler(async (req, res, next) => {
 
 export const getTeachersCalendar = asyncHandler(async (req, res, next) => {
   const { startDate, endDate } = req.query;
-  const start = toUTC(startDate)?.toDate();
-  const end = toUTC(endDate)?.toDate();
+  const start = toUTC(startDate, req.timezone)?.toDate();
+  const end = toUTC(endDate, req.timezone)?.toDate();
   const teachers = await db.findMany({
     model: "teacher",
     select: {
@@ -462,10 +477,15 @@ export const getTeachersCalendar = asyncHandler(async (req, res, next) => {
     },
   });
 
+  const teachersWithFormattedSchedules = teachers.map((teacher) => ({
+    ...teacher,
+    schedules: formatSchedules(teacher.schedules, req.timezone),
+  }));
+
   return successResponse({
     res,
     req,
-    data: { teachers },
+    data: { teachers: teachersWithFormattedSchedules },
     status: 200,
     message: "FETCH_SUCCESS",
   });

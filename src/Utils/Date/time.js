@@ -113,8 +113,9 @@ export const isInsideJoinWindow = (startTime, endTime, windowMinutes = 5) => {
 export const formatSchedules = (schedules, tz) => {
   const formatSingle = (s) => ({
     ...s,
-    start_time: toLocal(s.start_time, tz),
-    end_time: toLocal(s.end_time, tz),
+    display_start_time: toLocal(s.start_time, tz, "YYYY-MM-DD hh:mm A"),
+    display_end_time: toLocal(s.end_time, tz, "YYYY-MM-DD hh:mm A"),
+    display_timezone: tz || DEFAULT_TIMEZONE,
   });
 
   if (Array.isArray(schedules)) {
@@ -151,10 +152,16 @@ export const combineDateAndTime = (date, timeStr, tz = DEFAULT_TIMEZONE) => {
  * @param {number} count - Optional limit on number of dates
  * @returns {Date[]}
  */
-export const getDatesBetweenUTC = (startDate, endDate, days, count) => {
+export const getDatesBetweenUTC = (
+  startDate,
+  endDate,
+  days,
+  count,
+  tz = DEFAULT_TIMEZONE,
+) => {
   const dates = [];
-  let curr = dayjs.utc(startDate).startOf("day");
-  const end = endDate ? dayjs.utc(endDate).startOf("day") : null;
+  let curr = dayjs.tz(startDate, tz).startOf("day");
+  const end = endDate ? dayjs.tz(endDate, tz).startOf("day") : null;
 
   const dayMap = {
     sunday: 0,

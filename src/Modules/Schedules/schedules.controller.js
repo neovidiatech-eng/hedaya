@@ -58,8 +58,8 @@ export const getAllSchedules = asyncHandler(async (req, res, next) => {
   // 📅 فلترة بالتاريخ
   if (start_date && end_date) {
     where.start_time = {
-      gte: normalizeDate(start_date),
-      lte: normalizeDate(end_date),
+      gte: normalizeDate(start_date, req.timezone),
+      lte: normalizeDate(end_date, req.timezone),
     };
   }
 
@@ -309,7 +309,13 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
   // If count is not provided but student has sessions, we could use sessions_remaining as a default count if endDate is missing
   const effectiveCount = count || (endDate ? null : student.sessions_remaining);
 
-  let dates = getDatesBetweenUTC(startDate, endDate, days, effectiveCount);
+  let dates = getDatesBetweenUTC(
+    startDate,
+    endDate,
+    days,
+    effectiveCount,
+    req.timezone,
+  );
 
   // Session check for recurring: Cap the dates to the student's remaining sessions
   if (dates.length > student.sessions_remaining) {
@@ -417,7 +423,7 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
       end_time,
       subjectId: subject_id,
       is_recurring: true,
-      day_of_week: date.toLocaleDateString("en-US", { weekday: "long" }),
+      day_of_week: dayjs.utc(start_time).tz(req.timezone).format("dddd"),
       parent_recurring_id: parentRecurringId,
     });
 
@@ -758,12 +764,11 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
     startTime = start_time
       ? normalizeDate(start_time, req.timezone)
       : startTime;
-    endTime = getEndTime(
+    endTime = getEndTime({
       startTime,
-      sessionType,
-      schedule.student.plan?.sessionTime,
-      req.timezone,
-    );
+      duration: schedule.student.plan?.sessionTime,
+      tz: req.timezone,
+    });
 
     updateData.start_time = startTime;
     updateData.end_time = endTime;
