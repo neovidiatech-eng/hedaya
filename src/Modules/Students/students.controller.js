@@ -12,10 +12,19 @@ import {
   looksEncrypted,
 } from "../../Utils/Security/index.js";
 
-export const getAllStudents = asyncHandler(async (req, res, next) => {
-  const { search, country, plans, page = 1, limit = 10 } = req.query;
+const getStudentStats = async (where = {}) => {
+  const [totalCount, activeCount, inactiveCount] = await Promise.all([
+    db.count({ model: "student", where }),
+    db.count({ model: "student", where: { ...where, active: true } }),
+    db.count({ model: "student", where: { ...where, active: false } }),
+  ]);
 
+  return { totalCount, activeCount, inactiveCount };
+};
+
+const getStudentsWhere = ({ search, country, plans }) => {
   const where = {};
+
   if (search) {
     where.user = {
       OR: [
@@ -29,6 +38,19 @@ export const getAllStudents = asyncHandler(async (req, res, next) => {
   }
   if (plans) {
     where.planId = plans;
+  }
+
+  return where;
+};
+
+export const getAllStudents = asyncHandler(async (req, res, next) => {
+  const { search, country, plans, page = 1, limit = 10, active } = req.query;
+
+  const statsWhere = getStudentsWhere({ search, country, plans });
+  const where = { ...statsWhere };
+
+  if (active !== undefined) {
+    where.active = active === "true";
   }
 
   const { items: students, pagination } =
@@ -65,12 +87,28 @@ export const getAllStudents = asyncHandler(async (req, res, next) => {
       };
     }),
   );
+  const stats = await getStudentStats(statsWhere);
 
   return successResponse({
     res,
     req,
     message: "FETCH_SUCCESS",
-    data: { studentsData, pagination },
+    data: { studentsData, pagination, ...stats },
+    status: 200,
+  });
+});
+
+export const getStudentsStats = asyncHandler(async (req, res, next) => {
+  const { search, country, plans } = req.query;
+  const stats = await getStudentStats(
+    getStudentsWhere({ search, country, plans }),
+  );
+
+  return successResponse({
+    res,
+    req,
+    message: "FETCH_SUCCESS",
+    data: stats,
     status: 200,
   });
 });

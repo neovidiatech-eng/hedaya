@@ -5,7 +5,8 @@ import { asyncHandler, errorResponse, successResponse } from "../../Utils/Respon
 import { decryptText, looksEncrypted } from "../../Utils/Security/index.js";
 
 export const getallSubscriptions = asyncHandler(async (req, res, next) => {
-  const subscriptions = await db.findMany({
+  
+  const subscriptions = await db.findManyWithPaginationAndCount({
     model: "Subscription",
     include: {
       user: {
@@ -17,9 +18,14 @@ export const getallSubscriptions = asyncHandler(async (req, res, next) => {
       currency: true,
     },
   });
+  const pendingSubscriptions = await db.count({
+    model: "Subscription",
+    where: { status: "pending" },
+  });
+  
 
   const subscriptionsData = await Promise.all(
-    subscriptions.map(async (subscription) => {
+    subscriptions.items.map(async (subscription) => {
       const phone = looksEncrypted(subscription.user.phone)
         ? await decryptText({ text: subscription.user.phone })
         : subscription.user.phone;
@@ -70,7 +76,7 @@ export const getallSubscriptions = asyncHandler(async (req, res, next) => {
   return successResponse({
     res,
     req,
-    data: subscriptionsData,
+    data: {subscriptionsData ,pendingSubscriptions, ...subscriptions.pagination},
     message: "SUBSCRIPTIONS_FETCHED",
     status: 200,
   });
