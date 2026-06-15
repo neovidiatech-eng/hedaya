@@ -264,6 +264,11 @@ export const generalFeilds = {
     "boolean.empty": "Active cannot be empty",
     "any.required": "Active is required",
   }),
+  isHidden: Joi.boolean().required().messages({
+    "boolean.base": "isHidden must be a boolean",
+    "boolean.empty": "isHidden cannot be empty",
+    "any.required": "isHidden is required",
+  }),
   bestSeller: Joi.boolean().required().messages({
     "boolean.base": "Best seller must be a boolean",
     "boolean.empty": "Best seller cannot be empty",

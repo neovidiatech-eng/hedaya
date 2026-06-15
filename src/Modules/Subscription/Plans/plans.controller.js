@@ -28,6 +28,33 @@ export const getAllPlans = asyncHandler(async (req, res, next) => {
     data: allPlans,
   });
 });
+export const getAllLandingPlans = asyncHandler(async (req, res, next) => {
+  const allPlans = await db.findMany({
+    model: "Plans",
+    where: {
+      isHidden: false,
+      active:true,
+    },
+    include: {
+      currency: {
+        select: {
+          id: true,
+          name_en: true,
+          name_ar: true,
+          symbol: true,
+          code: true,
+        },
+      },
+    },
+  });
+  return successResponse({
+    res,
+    req,
+    message: "FETCH_SUCCESS",
+    status: 200,
+    data: allPlans,
+  });
+});
 export const createPlan = asyncHandler(async (req, res, next) => {
   const {
     name_en,
@@ -41,6 +68,7 @@ export const createPlan = asyncHandler(async (req, res, next) => {
     features,
     sessionTime,
     currencyId,
+    isHidden
   } = req.body;
   const existPlan = await db.findFirst({
     model: "Plans",
@@ -85,6 +113,7 @@ export const createPlan = asyncHandler(async (req, res, next) => {
       features,
       sessionTime: parseInt(sessionTime),
       currencyId,
+      isHidden: isHidden || false,
     },
   });
   if (!plan) {
@@ -119,6 +148,7 @@ export const updatePlan = asyncHandler(async (req, res, next) => {
     features,
     sessionTime,
     currencyId,
+    isHidden
   } = req.body;
 
   const plan = await db.findOne({
@@ -150,7 +180,7 @@ export const updatePlan = asyncHandler(async (req, res, next) => {
   if (features !== undefined) data.features = features;
   if (sessionTime !== undefined) data.sessionTime = sessionTime;
   if (currencyId !== undefined) data.currencyId = currencyId;
-
+  if (isHidden !== undefined) data.isHidden = isHidden;
   const updatedPlan = await db.updateOne({
     model: "Plans",
     where: { id },

@@ -11,6 +11,7 @@ import {
 
 const router = Router();
 router.get("/", plans.getAllPlans);
+router.get("/landing", plans.getAllLandingPlans);
 
 router.post(
   "/",

@@ -115,6 +115,7 @@ model Plans {
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
   active               Boolean                 @default(false)
+  isHidden               Boolean                 @default(false)
   bestSeller           Boolean                 @default(false)
   sessionsCount        Float                   @default(0)
   sessionTime          Float                   @default(0)

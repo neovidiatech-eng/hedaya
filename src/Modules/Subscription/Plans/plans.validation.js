@@ -14,7 +14,9 @@ export const createPlanSchema = {
     bestSeller: generalFeilds.bestSeller.required(),
     features: generalFeilds.features.required(),
     currencyId: generalFeilds.id.required(),
+    isHidden: generalFeilds.isHidden,
   }),
+
 };
 
 export const updatePlanSchema = {
@@ -22,14 +24,15 @@ export const updatePlanSchema = {
     name_en: generalFeilds.name_en,
     name_ar: generalFeilds.name_ar,
     description: generalFeilds.description,
-    price: generalFeilds.price,
-    duration: generalFeilds.duration,
-    sessionsCount: generalFeilds.sessionsCount,
-    sessionTime: generalFeilds.sessionTime,
-    active: generalFeilds.active,
-    bestSeller: generalFeilds.bestSeller,
-    features: generalFeilds.features,
+    price: generalFeilds.price.optional(),
+    duration: generalFeilds.duration.optional(),
+    sessionsCount: generalFeilds.sessionsCount.optional(),
+    sessionTime: generalFeilds.sessionTime.optional(),
+    active: generalFeilds.active.optional(),
+    bestSeller: generalFeilds.bestSeller.optional(),
+    features: generalFeilds.features.optional(),
     currencyId: generalFeilds.id,
+    isHidden: generalFeilds.isHidden.optional(),
   }),
   params: Joi.object({
     id: generalFeilds.id.required(),
