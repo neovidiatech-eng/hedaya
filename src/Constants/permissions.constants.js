@@ -26,6 +26,38 @@ export const PERMISSIONS_V2 = {
     UPDATE: "users:update",
     DELETE: "users:delete",
   },
+
+  // Teachers Management
+  TEACHERS: {
+    READ: "teachers:read",
+    CREATE: "teachers:create",
+    UPDATE: "teachers:update",
+    DELETE: "teachers:delete",
+  },
+
+  // Students Management
+  STUDENTS: {
+    READ: "students:read",
+    CREATE: "students:create",
+    UPDATE: "students:update",
+    DELETE: "students:delete",
+  },
+
+  // Staff Management
+  STAFF: {
+    READ: "staff:read",
+    CREATE: "staff:create",
+    UPDATE: "staff:update",
+    DELETE: "staff:delete",
+  },
+
+  // Parents Management
+  PARENTS: {
+    READ: "parents:read",
+    CREATE: "parents:create",
+    UPDATE: "parents:update",
+    DELETE: "parents:delete",
+  },
   
   // Role Management
   ROLES: {

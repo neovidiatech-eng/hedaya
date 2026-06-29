@@ -6,11 +6,16 @@ import {
 import * as db from "../../database/dbService.js";
 import { ensureExists } from "../../database/genericService.js";
 import {
-  decryptPasswordForResponse,
-  decryptText,
+  decryptUserSensitiveFields,
   encryptPassword,
-  looksEncrypted,
 } from "../../Utils/Security/index.js";
+import { createAdminNotification } from "../Notifications/notifications.controller.js";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc.js";
+import timezone from "dayjs/plugin/timezone.js";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 export const getAllTeachers = asyncHandler(async (req, res, next) => {
   const { search, page = 1, limit = 10, active } = req.query;
@@ -43,32 +48,21 @@ export const getAllTeachers = asyncHandler(async (req, res, next) => {
       },
     });
 
-  const teachersData = await Promise.all(
-    teachers.map(async (teacher) => ({
-      ...teacher,
-      user: teacher.user
-        ? {
-            ...teacher.user,
-            password: await decryptPasswordForResponse(teacher.user.password),
-            phone: looksEncrypted(teacher.user.phone)
-              ? await decryptText({ text: teacher.user.phone })
-              : teacher.user.phone,
-          }
-        : teacher.user,
-    })),
-  );
-
   const activeCount = await db.count({
     model: "teacher",
     where: { active: true },
   });
+
+  await Promise.all(
+    teachers.map((teacher) => decryptUserSensitiveFields(teacher.user)),
+  );
 
   return successResponse({
     res,
     req,
     message: "FETCH_SUCCESS",
     data: {
-      teachers: teachersData,
+      teachers,
       pagination,
       activeCount,
       inactiveCount: pagination.totalItems - activeCount,
@@ -83,6 +77,8 @@ export const createTeacher = asyncHandler(async (req, res, next) => {
     password,
     phone,
     code_country,
+    country,
+    nationality,
     currency_id,
     gender,
     hour_price,
@@ -95,13 +91,11 @@ export const createTeacher = asyncHandler(async (req, res, next) => {
   // Parallel checks for existence/uniqueness
   const [
     checkUserByEmail,
-    checkUserByPhone,
     checkCurrency,
     checkSubjects,
     getrole,
   ] = await Promise.all([
     db.findOne({ model: "user", where: { email } }),
-    db.findFirst({ model: "user", where: { phone } }),
     db.findOne({ model: "currency", where: { id: currency_id } }),
     db.findMany({
       model: "subjects",
@@ -122,13 +116,6 @@ export const createTeacher = asyncHandler(async (req, res, next) => {
     return errorResponse({
       req,
       message: "EMAIL_EXISTS",
-      next,
-      status: 400,
-    });
-  if (checkUserByPhone)
-    return errorResponse({
-      req,
-      message: "PHONE_EXISTS",
       next,
       status: 400,
     });
@@ -160,6 +147,8 @@ export const createTeacher = asyncHandler(async (req, res, next) => {
         password: encryptedPassword,
         phone,
         code_country,
+        country,
+        nationality,
         ...(getrole && { roleId: getrole.id }),
         confirmAt: new Date(), // Teachers created by admin are confirmed by default
         status: "active",
@@ -196,18 +185,13 @@ export const createTeacher = asyncHandler(async (req, res, next) => {
       },
     });
 
-    return {
-      ...teacher,
-      user: teacher.user
-        ? {
-            ...teacher.user,
-            password: await decryptPasswordForResponse(teacher.user.password),
-            phone: looksEncrypted(teacher.user.phone)
-              ? await decryptText({ text: teacher.user.phone })
-              : teacher.user.phone,
-          }
-        : teacher.user,
-    };
+    return teacher;
+  });
+
+  await createAdminNotification({
+    title: "تم اضافة مدرس جديد",
+    message: `تم اضافة مدرس جديد: ${name} (${email}).`,
+    type: "new_teacher",
   });
 
   return successResponse({
@@ -234,20 +218,143 @@ export const getTeacher = asyncHandler(async (req, res, next) => {
     message: "TEACHER_NOT_FOUND",
   });
 
-  if (teacher?.user) {
-    teacher.user.password = await decryptPasswordForResponse(
-      teacher.user.password,
-    );
-    teacher.user.phone = looksEncrypted(teacher.user.phone)
-      ? await decryptText({ text: teacher.user.phone })
-      : teacher.user.phone;
-  }
+  await decryptUserSensitiveFields(teacher.user);
+
+  // Calculate teacher stats
+  const uniqueStudents = await db.findMany({
+    model: "schedule",
+    where: { teacherId: id },
+    distinct: ["studentId"],
+    select: { studentId: true },
+  });
+  const totalStudents = uniqueStudents.length;
+
+  const completedSessionsCount = await db.count({
+    model: "schedule",
+    where: {
+      teacherId: id,
+      status: "completed",
+    },
+  });
+
+  const tz = req.timezone || "Africa/Cairo";
+  const nowLocal = dayjs().tz(tz);
+  const startOfDay = nowLocal.startOf("day").utc().toDate();
+  const endOfDay = nowLocal.endOf("day").utc().toDate();
+
+  const todaySessionsCount = await db.count({
+    model: "schedule",
+    where: {
+      teacherId: id,
+      start_time: {
+        gte: startOfDay,
+        lte: endOfDay,
+      },
+    },
+  });
+
+  const upcomingSessionsCount = await db.count({
+    model: "schedule",
+    where: {
+      teacherId: id,
+      status: { in: ["scheduled", "planned"] },
+      start_time: {
+        gte: nowLocal.utc().toDate(),
+      },
+    },
+  });
+
+  // Calculate durations and earnings
+  const completedSchedules = await db.findMany({
+    model: "schedule",
+    where: {
+      teacherId: id,
+      status: "completed",
+    },
+    select: {
+      start_time: true,
+      end_time: true,
+    },
+  });
+
+  const pendingSchedules = await db.findMany({
+    model: "schedule",
+    where: {
+      teacherId: id,
+      status: { in: ["scheduled", "ongoing", "planned"] },
+    },
+    select: {
+      start_time: true,
+      end_time: true,
+    },
+  });
+
+  const calculateHours = (schedules) => {
+    return schedules.reduce((total, s) => {
+      const diffMs = new Date(s.end_time) - new Date(s.start_time);
+      const hours = diffMs / (1000 * 60 * 60);
+      return total + hours;
+    }, 0);
+  };
+
+  const completedHours = calculateHours(completedSchedules);
+  const pendingHours = calculateHours(pendingSchedules);
+  const totalHours = completedHours + pendingHours;
+
+  const completedEarnings = completedHours * teacher.hour_price;
+  const pendingEarnings = pendingHours * teacher.hour_price;
+
+  const wallet = await db.findFirst({
+    model: "Wallet",
+    where: {
+      userId: teacher.user_id,
+      type: "teacher",
+    },
+  });
+  const availableBalance = wallet ? wallet.balance : 0;
+
+  const pendingWithdrawalsResult = await db.findMany({
+    model: "WithdrawalRequest",
+    where: {
+      teacherId: teacher.user_id,
+      status: "pending",
+    },
+    select: {
+      amount: true,
+    },
+  });
+  const pendingWithdrawals = pendingWithdrawalsResult.reduce((sum, w) => sum + w.amount, 0);
+
+  const totalDue = availableBalance + pendingEarnings;
+  const totalEarnings = completedEarnings + pendingEarnings;
+
+  const teacherData = {
+    ...teacher,
+    stats: {
+      totalStudents,
+      completedSessions: completedSessionsCount,
+      todaySessions: todaySessionsCount,
+      upcomingSessions: upcomingSessionsCount,
+      financials: {
+        totalHours,
+        hourPrice: teacher.hour_price,
+        totalDue,
+        totalEarnings,
+        completedEarnings,
+        completedHours,
+        pendingEarnings,
+        pendingHours,
+        availableBalance,
+        pendingWithdrawals,
+      },
+    },
+  };
 
   return successResponse({
     res,
     req,
     message: "FETCH_SUCCESS",
-    data: teacher,
+    data: teacherData,
   });
 });
 
@@ -259,6 +366,8 @@ export const updateTeacher = asyncHandler(async (req, res, next) => {
     password,
     phone,
     code_country,
+    country,
+    nationality,
     currency_id,
     gender,
     hour_price,
@@ -290,19 +399,17 @@ export const updateTeacher = asyncHandler(async (req, res, next) => {
       });
   }
 
-  if (phone && phone !== teacher.user.phone) {
-    const existing = await db.findFirst({ model: "user", where: { phone } });
-    if (existing)
-      return errorResponse({
-        req,
-        message: "PHONE_EXISTS",
-        next,
-        status: 400,
-      });
-  }
-
   // Update user data first if needed
-  if (name || email || encryptedPassword || phone || code_country) {
+  if (
+    name ||
+    email ||
+    encryptedPassword ||
+    phone ||
+    code_country ||
+    country ||
+    nationality ||
+    timezone
+  ) {
     await db.updateOne({
       model: "user",
       where: { id: teacher.user_id },
@@ -312,6 +419,8 @@ export const updateTeacher = asyncHandler(async (req, res, next) => {
         ...(encryptedPassword && { password: encryptedPassword }),
         ...(phone && { phone }),
         ...(code_country && { code_country }),
+        ...(country && { country }),
+        ...(nationality && { nationality }),
         ...(timezone && { timezone }),
       },
     });
@@ -342,14 +451,7 @@ export const updateTeacher = asyncHandler(async (req, res, next) => {
     },
   });
 
-  if (updatedTeacher?.user) {
-    updatedTeacher.user.password = await decryptPasswordForResponse(
-      updatedTeacher.user.password,
-    );
-    updatedTeacher.user.phone = looksEncrypted(updatedTeacher.user.phone)
-      ? await decryptText({ text: updatedTeacher.user.phone })
-      : updatedTeacher.user.phone;
-  }
+  await decryptUserSensitiveFields(updatedTeacher.user);
 
   return successResponse({
     res,

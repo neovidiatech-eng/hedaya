@@ -1,24 +1,36 @@
 import * as ChatService from "../../Modules/chat/chat.service.js";
 import * as RedisUtils from "../Redis/index.js";
 import * as db from "../../database/dbService.js";
-
-const emitError = (socket, key, params = {}) =>
-  socket.emit("error", {
-    message: socket.t ? socket.t(key, params) : key,
-  });
+import { getMessage } from "../i18n.js";
 
 /**
  * Socket.io Logic
  * Handles real-time communication events
  */
 
+let ioInstance;
+
+export const getIO = () => ioInstance;
+
 export const init_io = (io) => {
+  ioInstance = io;
   io.on("connection", async (socket) => {
     try {
       const user = socket.user;
       if (!user) return socket.disconnect();
 
-      console.log(`User connected: ${user.name} (${user.role.name})`);
+      // Join user-specific room
+      socket.join(`user_${user.id}`);
+
+      const acceptLang = socket.handshake.headers["accept-language"] || socket.handshake.auth?.lang;
+      let lang = "en";
+      if (acceptLang) {
+        lang = acceptLang.split(",")[0].split("-")[0].toLowerCase();
+      }
+      if (lang !== "en" && lang !== "ar") {
+        lang = "en";
+      }
+      socket.t = (key, params) => getMessage(key, lang, params);
 
       // 1. Online status tracking
       const isFirstConnection = await RedisUtils.setUserOnline(user.id, socket.id);
@@ -28,10 +40,10 @@ export const init_io = (io) => {
         socket.broadcast.emit("user:status", { userId: user.id, status: "online" });
       }
       // 2. Admin Special Handling: Auto-join all rooms
-      if (user.role.name === "admin") {
+      if (["admin", "super_admin"].includes(user.role.name)) {
         const allConversations = await db.findMany({ model: "Conversation", select: { id: true } });
         allConversations.forEach(conv => socket.join(`conv_${conv.id}`));
-        console.log(`Admin ${user.name} joined all conversation rooms`);
+        socket.join("user_admin");
       }
 
       /**
@@ -43,7 +55,7 @@ export const init_io = (io) => {
           // Check participation
           const canAccess = await ChatService.isParticipant(conversationId, user.id, user.role.name);
           if (!canAccess) {
-            return emitError(socket, "CHAT_CONVERSATION_ACCESS_DENIED");
+            return socket.emit("error", { message: socket.t("UNAUTHORIZED_CONVERSATION_ACCESS") });
           }
 
           // Join the room
@@ -54,10 +66,8 @@ export const init_io = (io) => {
           
           // Emit initial messages only to this client
           socket.emit("messages:history", { conversationId, messages });
-          
-          console.log(`User ${user.name} opened conversation ${conversationId}`);
         } catch (error) {
-          emitError(socket, error.cause ? error.message : "INTERNAL_SERVER_ERROR");
+          socket.emit("error", { message: socket.t(error.message) });
         }
       });
 
@@ -69,19 +79,19 @@ export const init_io = (io) => {
         try {
           // Rule: Admin is read-only
           if (user.role.name === "admin") {
-            return emitError(socket, "CHAT_ADMIN_READ_ONLY");
+            return socket.emit("error", { message: socket.t("ADMINS_CANNOT_SEND_MESSAGES") });
           }
 
           // Rule: Rate limiting (30 msgs/min)
           const limited = await RedisUtils.isRateLimited(user.id);
           if (limited) {
-            return emitError(socket, "CHAT_RATE_LIMIT");
+            return socket.emit("error", { message: socket.t("RATE_LIMIT_EXCEEDED") });
           }
 
           // Check participation
           const canAccess = await ChatService.isParticipant(conversationId, user.id, user.role.name);
           if (!canAccess) {
-            return emitError(socket, "CHAT_NOT_PARTICIPANT");
+            return socket.emit("error", { message: socket.t("NOT_CONVERSATION_PARTICIPANT") });
           }
 
           // Save to DB
@@ -91,7 +101,7 @@ export const init_io = (io) => {
           io.to(`conv_${conversationId}`).emit("message:new", message);
 
         } catch (error) {
-          emitError(socket, error.cause ? error.message : "INTERNAL_SERVER_ERROR");
+          socket.emit("error", { message: socket.t(error.message) });
         }
       });
 
@@ -173,7 +183,6 @@ export const init_io = (io) => {
       });
 
       socket.on("disconnect", async () => {
-        console.log(`User disconnected: ${user.name}`);
         const isLastConnection = await RedisUtils.setUserOffline(user.id, socket.id);
         
         // Notify others only if this was the last connection

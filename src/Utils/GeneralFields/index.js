@@ -3,6 +3,25 @@ import Joi from "joi";
 const countryCallingCodePattern = /^\+[1-9]\d{0,2}$/;
 const nationalPhonePattern = /^[0-9]{4,14}$/;
 
+export const validateInternationalPhoneLength = ({
+  phoneKey = "phone",
+  codeCountryKey = "codeCountry",
+} = {}) => {
+  return (value, helpers) => {
+    const phone = value?.[phoneKey];
+    const codeCountry = value?.[codeCountryKey];
+
+    if (!phone || !codeCountry) return value;
+
+    const codeDigits = codeCountry.replace("+", "");
+    if (codeDigits.length + phone.length > 15) {
+      return helpers.error("phone.e164Length");
+    }
+
+    return value;
+  };
+};
+
 export const validatePhoneNumberWithCountryCode =
   (codeCountryField) => (value, helpers) => {
     const codeCountry = value?.[codeCountryField];
@@ -27,6 +46,9 @@ export const generalFeilds = {
     "any.required": "Role name is required",
   }),
   url: Joi.string().uri(),
+  fcmToken: Joi.string()
+    .min(50)
+    .max(500),
 
   permission_name: Joi.string().min(3).max(32).messages({
     "string.base": "Permission name must be a string",
@@ -97,6 +119,11 @@ export const generalFeilds = {
     "string.base": "Country must be a string",
     "string.empty": "Country cannot be empty",
     "any.required": "Country is required",
+  }),
+  nationality: Joi.string().messages({
+    "string.base": "Nationality must be a string",
+    "string.empty": "Nationality cannot be empty",
+    "any.required": "Nationality is required",
   }),
   phone: Joi.string()
     .pattern(nationalPhonePattern)
@@ -234,7 +261,7 @@ export const generalFeilds = {
     "any.required": "Default is required",
   }),
 
-  description: Joi.string().min(10).max(1000).messages({
+  description: Joi.string().messages({
     "string.base": "Description must be a string",
     "string.empty": "Description cannot be empty",
     "any.required": "Description is required",

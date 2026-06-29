@@ -76,6 +76,22 @@ jobs:
             cat > .env << 'ENVEOF'
             DATABASE_URL=postgresql://${{ secrets.POSTGRES_USER }}:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/${{ secrets.POSTGRES_DB }}
             POSTGRES_USER=${{ secrets.POSTGRES_USER }}
+            MAIL_HOST="mail.hedaya-academy.com"
+            MAIL_PORT="465"
+            MAIL_USER="noreply@hedaya-academy.com"
+            MAIL_PASS="Hedaya@2026"
+            MAIL_FROM="noreply@hedaya-academy.com"
+            FIREBASE_TYPE="service_account"
+            FIREBASE_PROJECT_ID="hedaya-notifications"
+            FIREBASE_PRIVATE_KEY_ID="422aad181e8c5a9a08af91a7fdd8df821b55742b"
+            FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDEXe6fAk1b5DHq\nL6FlIffOND1VAbUxB1M+YR97M9gdPwqFJylCDKf6r4Czbw3yl7CtAQAu8VimZgWW\nfzaU0zmjvlFu4FdFc6wXoLDcWtJwxxhSf7Co7KEH6+C+gl6bxQs0WgAGeIZYs4Kw\ne5vaY8m++BmxtLtuzMQYhIEDHdGuAKDHLSEpThTjkdCWzp1yhzVov04pxCh2QjXU\na+DMe2uveVh3qfuU3qC9kY4dLTttQLHxdSOgrQL3l7vsggRJGWQk8VIQEBc/39OL\n/U7UgaeJLp2NY3VEMPttq7D7moe/eTwKsgw/Y133UsKmL73NbaUcJ/RuREwdBbm4\nWyuVuGTDAgMBAAECggEABFhYa4qnVTq0mLbVbpb0qZ/soYETANLlgSewr3m4tQD2\n8HZViowcJXG/uni2dCFDfA3dyAF4Jt/IDN9OFmH20GGUN2IIcarQaooYOnAEtbvP\nanfqhqUMdSU/iQelJJ4/aWOlGio4PXs6D5dUnghU56sMFStnda6wl3hLIIYG5JTo\nqxhU9aLC9FL7z9tg/pye9sJRYrnBdvTE5kbsLTJSMEeBF/UguTexhfYtWk3N5Nv6\n35z8bLrIfY2zyrOxgGhJFWPYw6zJXzJfgOKpl/4JUg/OmB0xsSs+z8kv72pR6VEE\nk5ZYM3qJTXDNSdsFlO80EMh2TcWsp4M9xjU2KHKdOQKBgQD4UUBXgHLXrqv1N/st\ngcr8QJhHR5yUneZVfsr4kItZaqsOmXnfKCmD4uuTqTkWvFh/1Nlgq8x5RAKcC5c9\nHM+xZQXgAu6lV+ZAHQEMu5xJBAdeJ5L7jnC0u6Sm1lW5KBHBxiV+pY6KENhEwnGG\njhRqkbBapZFAb744z8BOHdg5CwKBgQDKcTeoJ1xqLXcPNeVSlDZeodI1GPjZ8xdv\n4DUsHm2TeNk5/KFD4JXpkuHiejjllOPjc1bv4AoDa1jdyNK723HU0ZXM7oXaiIu8\n7oADXzD8tFLSyTWh+7o3+pyNWWOGTqB8mlt0tjYEet04fCcOn6Airp8v8QLhVcwH\nK3Q6eOMGKQKBgQDpKGGhx5oNqpULy2StdhGCiaRySWtcoGaGIGe0vQQbEW1MaA9m\n2e8hRxCrtVlFX9Q5M0Jo4uc7dgB9ROTdHRBnINRDYn1yAvbPfGxf6Ej2xjGk1sPM\nMBLjoM0ZWmdjU5xYthS+tfUA7pAi//BYx0+kQOe2NYANYN7buTZ4Is3DwQKBgDAt\nw64sN+05BsXC8OG3Tj01S97BI7BTDzfb5yupzjAzqZcITaTm1SaygzmwFsxko9uk\nvoL2EcwAhzS5L5XvwuaAPqN3/LkmmAMNy7+BrxnlHHT31+DGFOpvpURqiqoTGlSt\nM6jSGIb2aqGfwnfTe3vljRMOy72u+pCWQeIMlRMJAoGBAIpjIPkYcMdDiLlMTBMd\nDXpN4cjeSdaWffQfO0I1nQHrDZGxbIUSSCVsgMiF81y8roxZvu4eRcnkKMTOwN1o\ni2AzHUoPpOUkYprMpPQk4UuYijUZ7YEMyrRiQg4VGYtbn33zacw43uxm/yav0xbF\nZ/3DBzjT2tGLUPICxZf0AewB\n-----END PRIVATE KEY-----\n"
+            FIREBASE_CLIENT_EMAIL="firebase-adminsdk-fbsvc@hedaya-notifications.iam.gserviceaccount.com"
+            FIREBASE_CLIENT_ID="100736825467884064464"
+            FIREBASE_AUTH_URI="https://accounts.google.com/o/oauth2/auth"
+            FIREBASE_TOEKN_URI="https://oauth2.googleapis.com/token"
+            FIREBASE_AUTH_PROVIDER="https://www.googleapis.com/oauth2/v1/certs"
+            FIREBASE_CLIENT_X509_CERT_URL="https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40hedaya-notifications.iam.gserviceaccount.com",
+            FIREBASE_UNIVERSE_DOMAIN= "googleapis.com"
             POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
             POSTGRES_DB=${{ secrets.POSTGRES_DB }}
             REDIS_URL=${{ secrets.REDIS_URL }}

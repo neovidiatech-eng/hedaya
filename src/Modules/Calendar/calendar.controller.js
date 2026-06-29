@@ -1,10 +1,11 @@
 import { asyncHandler, successResponse, errorResponse } from "../../Utils/Response.js";
 import * as db from "../../database/dbService.js";
-import { formatSchedules, getNowUTC, toUTC } from "../../Utils/Date/time.js";
+import { toUTC, formatSchedules } from "../../Utils/Date/time.js";
+import dayjs from "dayjs";
 
 export const getCalendar = asyncHandler(async (req, res, next) => {
   const { startDate, endDate } = req.query;
-  const now = getNowUTC();
+  const now = dayjs().tz(req.timezone || "Africa/Cairo");
 
   // Day boundaries in UTC
   const startOfDay = now.startOf("day").toDate();
@@ -17,7 +18,7 @@ export const getCalendar = asyncHandler(async (req, res, next) => {
     db.count({
       model: "schedule",
       where: {
-        status: "planned",
+        status: { in: ["scheduled", "planned"] },
       },
     }),
     db.findMany({
@@ -33,15 +34,12 @@ export const getCalendar = asyncHandler(async (req, res, next) => {
       },
     }),
   ]);
+  const formattedSessions = formatSchedules(sessions, req.timezone);
+  const formattedTodaySessions = formatSchedules(toDaySessions, req.timezone);
   return successResponse({
     res,
     req,
-    data: {
-      sessions: formatSchedules(sessions, req.timezone),
-      count,
-      planned,
-      toDaySessions: formatSchedules(toDaySessions, req.timezone),
-    },
+    data: { sessions: formattedSessions, count, planned, toDaySessions: formattedTodaySessions },
     status: 200,
     message: "FETCH_SUCCESS",
   });
@@ -49,7 +47,7 @@ export const getCalendar = asyncHandler(async (req, res, next) => {
 export const getStudentCalendar = asyncHandler(async (req, res, next) => {
   const { startDate, endDate } = req.query;
   const { user } = req;
-  const now = getNowUTC();
+  const now = dayjs().tz(req.timezone || "Africa/Cairo");
   const id = user.student?.id;
   if (!id) {
     return errorResponse({ req, next, message: "STUDENT_NOT_FOUND", status: 404 });
@@ -105,7 +103,7 @@ export const getStudentCalendar = asyncHandler(async (req, res, next) => {
     db.count({
       model: "schedule",
       where: {
-        status: "planned",
+        status: { in: ["scheduled", "planned"] },
         studentId: id,
       },
       include: {
@@ -229,15 +227,12 @@ export const getStudentCalendar = asyncHandler(async (req, res, next) => {
       },
     }),
   ]);
+  const formattedSessions = formatSchedules(sessions, req.timezone);
+  const formattedTodaySessions = formatSchedules(toDaySessions, req.timezone);
   return successResponse({
     res,
     req,
-    data: {
-      sessions: formatSchedules(sessions, req.timezone),
-      count,
-      planned,
-      toDaySessions: formatSchedules(toDaySessions, req.timezone),
-    },
+    data: { sessions: formattedSessions, count, planned, toDaySessions: formattedTodaySessions },
     status: 200,
     message: "FETCH_SUCCESS",
   });
@@ -245,7 +240,7 @@ export const getStudentCalendar = asyncHandler(async (req, res, next) => {
 export const getTeacherCalendar = asyncHandler(async (req, res, next) => {
   const { startDate, endDate } = req.query;
   const { user } = req;
-  const now = getNowUTC();
+  const now = dayjs().tz(req.timezone || "Africa/Cairo");
   const id = user.teacher?.id;
   if (!id) {
     return errorResponse({ req, next, message: "TEACHER_NOT_FOUND", status: 404 });
@@ -302,7 +297,7 @@ export const getTeacherCalendar = asyncHandler(async (req, res, next) => {
     db.count({
       model: "schedule",
       where: {
-        status: "planned",
+        status: { in: ["scheduled", "planned"] },
         teacherId: id,
       },
       include: {
@@ -426,15 +421,12 @@ export const getTeacherCalendar = asyncHandler(async (req, res, next) => {
       },
     }),
   ]);
+  const formattedSessions = formatSchedules(sessions, req.timezone);
+  const formattedTodaySessions = formatSchedules(toDaySessions, req.timezone);
   return successResponse({
     res,
     req,
-    data: {
-      sessions: formatSchedules(sessions, req.timezone),
-      count,
-      planned,
-      toDaySessions: formatSchedules(toDaySessions, req.timezone),
-    },
+    data: { sessions: formattedSessions, count, planned, toDaySessions: formattedTodaySessions },
     status: 200,
     message: "FETCH_SUCCESS",
   });
@@ -477,7 +469,7 @@ export const getTeachersCalendar = asyncHandler(async (req, res, next) => {
     },
   });
 
-  const teachersWithFormattedSchedules = teachers.map((teacher) => ({
+  const formattedTeachers = teachers.map((teacher) => ({
     ...teacher,
     schedules: formatSchedules(teacher.schedules, req.timezone),
   }));
@@ -485,7 +477,7 @@ export const getTeachersCalendar = asyncHandler(async (req, res, next) => {
   return successResponse({
     res,
     req,
-    data: { teachers: teachersWithFormattedSchedules },
+    data: { teachers: formattedTeachers },
     status: 200,
     message: "FETCH_SUCCESS",
   });

@@ -18,7 +18,7 @@ router.use("/subjects", subjectsRouter);
 router.get(
   "/",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("teachers"),
   validation(getAllTeachersSchema),
   teacherController.getAllTeachers,
 );
@@ -26,14 +26,14 @@ router.get(
 router.get(
   "/my-students",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("teachers"),
   teacherController.getMyStudents,
 );
 
 router.post(
   "/create",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("teachers"),
   validation(createTeacherSchema),
   teacherController.createTeacher,
 );
@@ -41,7 +41,7 @@ router.post(
 router.get(
   "/:id",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("teachers"),
   validation(getTeacherSchema),
   teacherController.getTeacher,
 );
@@ -49,7 +49,7 @@ router.get(
 router.patch(
   "/update/:id",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("teachers"),
   validation(updateTeacherSchema),
   teacherController.updateTeacher,
 );
@@ -57,7 +57,7 @@ router.patch(
 router.delete(
   "/delete/:id",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("teachers"),
   validation(deleteTeacherSchema),
   teacherController.deleteTeacher,
 );

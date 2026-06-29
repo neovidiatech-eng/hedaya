@@ -9,7 +9,7 @@ export const compare = async ({ password, hash }) => {
 };
 
 export const encryptText = ({ text }) => {
-  return CryptoJS.AES.encrypt(text, process.env.ENCRYPT_KEY).toString();
+  return CryptoJS.AES.encrypt(String(text), process.env.ENCRYPT_KEY).toString();
 };
 
 export const decryptText = async ({ text }) => {
@@ -75,4 +75,37 @@ export const decryptUserForResponse = async (user) => {
   }
 
   return user;
+};
+
+export const decryptPassword = async ({ password }) => {
+  return await decryptText({ text: password });
+};
+
+export const verifyPassword = async ({ password, storedPassword }) => {
+  if (!password || !storedPassword) return false;
+
+  if (looksEncrypted(storedPassword)) {
+    const decryptedPassword = await decryptPassword({ password: storedPassword });
+    return decryptedPassword === password;
+  }
+
+  return await compare({ password, hash: storedPassword });
+};
+
+export const decryptUserSensitiveFields = async (user) => {
+  if (!user) return user;
+
+  if (user.password && looksEncrypted(user.password)) {
+    user.password = await decryptPassword({ password: user.password });
+  }
+
+  if (user.phone && looksEncrypted(user.phone)) {
+    user.phone = await decryptText({ text: user.phone });
+  }
+
+  return user;
+};
+
+export const decryptUsersSensitiveFields = async (users = []) => {
+  return await Promise.all(users.map((user) => decryptUserSensitiveFields(user)));
 };

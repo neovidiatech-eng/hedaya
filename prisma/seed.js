@@ -17,6 +17,7 @@ import { seedExpenses } from "./seeders/expenses.seeder.js";
 import { seedSubscriptions } from "./seeders/subscriptions.seeder.js";
 import { seedSystemWallet } from "./seeders/systemWallet.seeder.js";
 import { seedSettings } from "./seeders/settings.seeder.js";
+import { seedNotifications } from "./seeders/notifications.seeder.js";
 
 dotenv.config();
 
@@ -41,6 +42,7 @@ async function main() {
   await seedExpenses();
   await seedSystemWallet();
   await seedSettings();
+  await seedNotifications();
 
   console.log("--- Seeding Finished Successfully ---");
 }

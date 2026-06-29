@@ -36,10 +36,9 @@ export const createSchedule = {
       description: generalFeilds.description
         .messages({
           "string.empty": "DESCRIPTION_REQUIRED",
-          "any.required": "DESCRIPTION_REQUIRED",
           "string.pattern.base": "DESCRIPTION_INVALID",
         })
-        .required(),
+        .optional(),
       link: generalFeilds.url
         .messages({
           "string.empty": "LINK_REQUIRED",
@@ -47,11 +46,12 @@ export const createSchedule = {
           "string.pattern.base": "LINK_INVALID",
         })
         .required(),
-      notes: generalFeilds.description.messages({
-        "string.empty": "NOTES_REQUIRED",
-        "any.required": "NOTES_REQUIRED",
-        "string.pattern.base": "NOTES_INVALID",
-      }),
+      notes: generalFeilds.description
+        .messages({
+          "string.empty": "NOTES_REQUIRED",
+          "string.pattern.base": "NOTES_INVALID",
+        })
+        .optional(),
 
       start_time: generalFeilds.date.greater("now").messages({
         "string.empty": "START_TIME_REQUIRED",
@@ -77,9 +77,9 @@ export const createRecurringSchedule = {
       teacherId: generalFeilds.id.required(),
       subject_id: generalFeilds.id.required(),
       title: generalFeilds.name.required(),
-      description: generalFeilds.description.required(),
+      description: generalFeilds.description.optional(),
       link: generalFeilds.url.required(),
-      notes: generalFeilds.description,
+      notes: generalFeilds.description.optional(),
       startTime: Joi.string()
         .regex(/^([01]\d|2[0-3]):?([0-5]\d)$/)
         .required()
@@ -117,7 +117,7 @@ export const updateSchedule = {
       description: generalFeilds.description,
       link: generalFeilds.url,
       notes: generalFeilds.description,
-      status: Joi.string().valid("planned", "completed", "missed", "cancelled"),
+      status: Joi.string().valid("scheduled", "planned", "completed", "missed", "cancelled"),
       start_time: Joi.date().greater("now"),
 
       notification_Time: Joi.string().valid(...Object.values(notificationType)),
@@ -138,7 +138,7 @@ export const updateRecurringGroup = {
       description: generalFeilds.description,
       link: generalFeilds.url,
       notes: generalFeilds.description,
-      status: Joi.string().valid("planned", "completed", "missed", "cancelled"),
+      status: Joi.string().valid("scheduled", "planned", "completed", "missed", "cancelled"),
       startTime: Joi.string().regex(/^([01]\d|2[0-3]):?([0-5]\d)$/),
       notification_Time: Joi.string().valid(...Object.values(notificationType)),
     })

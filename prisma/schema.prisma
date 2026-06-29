@@ -9,6 +9,8 @@ datasource db {
 model user {
   id                   String                  @id @default(uuid())
   email                String                  @unique
+  nationality          String?
+  country              String?
   password             String?
   name                 String?
   phone                String? 
@@ -21,6 +23,7 @@ model user {
   googleId             String?                 @unique
   provider             String                  @default("local")
   timezone             String?                 @default("Africa/Cairo")
+  fcmToken             String?                 @default("")
   reviewsReceived      Review[]                @relation("ReviewsReceived")
   reviewsGiven         Review[]                @relation("ReviewsGiven")
   subscriptions        Subscription[]
@@ -322,7 +325,7 @@ model expenses {
 model homework {
   id          String   @id @default(uuid())
   title       String
-  description String
+  description String?
   status      String   @default("pending")
   dueDate     DateTime
   studentId   String

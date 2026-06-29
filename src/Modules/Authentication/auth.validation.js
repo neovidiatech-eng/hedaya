@@ -1,7 +1,7 @@
 import Joi from "joi";
 import {
   generalFeilds,
-  validatePhoneNumberWithCountryCode,
+  validateInternationalPhoneLength,
 } from "../../Utils/GeneralFields/index.js";
 
 export const registeritonSchema = {
@@ -14,6 +14,7 @@ export const registeritonSchema = {
       birth_date: generalFeilds.birth_date.required(),
       gender: generalFeilds.gender.required(),
       country: generalFeilds.country.required(),
+      nationality: generalFeilds.nationality.required(),
       phone: generalFeilds.phone.required(),
       plan_id: generalFeilds.id
         .messages({
@@ -24,7 +25,14 @@ export const registeritonSchema = {
         .required(),
       timezone: Joi.string().optional(),
     })
-    .custom(validatePhoneNumberWithCountryCode("codeCountry"))
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "codeCountry",
+      }),
+    )
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+    })
     .required(),
 };
 export const loginSchema = {
@@ -79,6 +87,17 @@ export const resetPasswordSchema = {
       otp: generalFeilds.otp.required(),
       password: generalFeilds.password.required(),
       confirm: generalFeilds.confirmPassword.required(),
+    })
+    .required(),
+};
+
+export const saveFCM = {
+  body: Joi.object()
+    .keys({
+      fcmToken: generalFeilds.fcmToken.required().messages({
+        "any.required": "FCM_TOKEN_REQUIRED",
+        "string.empty": "FCM_TOKEN_REQUIRED",
+      }),
     })
     .required(),
 };

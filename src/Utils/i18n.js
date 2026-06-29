@@ -25,10 +25,11 @@ export const getMessage = (key, lang = "en", params = {}) => {
   // Get raw message, fallback to key if missing in file
   let message = language[key] || locales["en"][key] || key;
 
-  // Replace parameters like {{name}}
+  // Replace parameters like {{name}} and {#name}
   if (params && typeof params === "object") {
     Object.keys(params).forEach((param) => {
       message = message.replace(new RegExp(`{{${param}}}`, "g"), params[param]);
+      message = message.replace(new RegExp(`{#${param}}`, "g"), params[param]);
     });
   }
 

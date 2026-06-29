@@ -25,7 +25,6 @@ export const socketAuthentication = async (socket, next) => {
 
     const decoded = verifyToken({ token });
     if (!decoded || !decoded.id) {
-      console.log(decoded);
       return next(socketError("INVALID_TOKEN", lang));
     }
 
@@ -41,7 +40,6 @@ export const socketAuthentication = async (socket, next) => {
         role: true,
       },
     });
-    console.log(user);
     
     if (!user) {
       return next(socketError("INVALID_TOKEN", lang));

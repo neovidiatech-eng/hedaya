@@ -1,15 +1,14 @@
 import joi from "joi";
 import {
   generalFeilds,
-  validatePhoneNumberWithCountryCode,
+  validateInternationalPhoneLength,
 } from "../../Utils/GeneralFields/index.js";
 export const getAllTeachersSchema = {
   query: joi.object({
     search: generalFeilds.search,
-    /*  page: generalFeilds.page,
-    limit: generalFeilds.limit,
-    sort: generalFeilds.sort,
-    sortType: generalFeilds.sortType, */
+     page: generalFeilds.page,
+     limit: generalFeilds.limit,
+
   }),
 };
 
@@ -21,6 +20,8 @@ export const createTeacherSchema = {
       password: generalFeilds.password.required(),
       phone: generalFeilds.phone.required(),
       code_country: generalFeilds.codeCountry.required(),
+      country: generalFeilds.country.optional(),
+      nationality: generalFeilds.nationality.optional(),
       subject_ids: joi.array().items(
         generalFeilds.id.messages({
           "string.base": "SUBJECT_ID_STRING",
@@ -46,7 +47,14 @@ export const createTeacherSchema = {
         })
         .optional(),
     })
-    .custom(validatePhoneNumberWithCountryCode("code_country"))
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "code_country",
+      }),
+    )
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+    })
     .required(),
 };
 
@@ -73,6 +81,8 @@ export const updateTeacherSchema = {
       password: generalFeilds.password,
       phone: generalFeilds.phone,
       code_country: generalFeilds.codeCountry,
+      country: generalFeilds.country,
+      nationality: generalFeilds.nationality,
       currency_id: generalFeilds.id.messages({
         "string.base": "CURRENCY_ID_STRING",
         "string.empty": "CURRENCY_ID_EMPTY",
@@ -96,6 +106,13 @@ export const updateTeacherSchema = {
       ),
       timezone: joi.string().optional(),
     })
-    .custom(validatePhoneNumberWithCountryCode("code_country"))
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "code_country",
+      }),
+    )
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+    })
     .required(),
 };

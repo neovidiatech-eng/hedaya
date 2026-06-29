@@ -1,7 +1,7 @@
 import Joi from "joi";
 import {
   generalFeilds,
-  validatePhoneNumberWithCountryCode,
+  validateInternationalPhoneLength,
 } from "../../Utils/GeneralFields/index.js";
 
 export const createStudentSchema = {
@@ -13,6 +13,7 @@ export const createStudentSchema = {
       phone: generalFeilds.phone.required(),
       phone_code: generalFeilds.codeCountry.required(),
       country: generalFeilds.country.required(),
+      nationality: generalFeilds.nationality.optional(),
       planId: generalFeilds.id
         .messages({
           "string.base": "PLAN_ID_MUST_BE_STRING",
@@ -26,7 +27,14 @@ export const createStudentSchema = {
       active: generalFeilds.active.required(),
       timezone: Joi.string().optional(),
     })
-    .custom(validatePhoneNumberWithCountryCode("phone_code")),
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "phone_code",
+      }),
+    )
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+    }),
 };
 
 export const updateStudentSchema = {
@@ -36,18 +44,28 @@ export const updateStudentSchema = {
   body: Joi.object()
     .keys({
       name: generalFeilds.name,
+      email: generalFeilds.email,
+      password: generalFeilds.password,
       phone: generalFeilds.phone,
       phone_code: generalFeilds.codeCountry,
       country: generalFeilds.country,
+      nationality: generalFeilds.nationality,
       planId: generalFeilds.id,
       birth_date: generalFeilds.birth_date,
       gender: generalFeilds.gender,
       active: generalFeilds.active,
       timezone: Joi.string().optional(),
     })
-    .custom(validatePhoneNumberWithCountryCode("phone_code"))
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "phone_code",
+      }),
+    )
     .min(1)
-    .messages({ "object.min": "VALIDATION_MIN_ONE_FIELD" }),
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+      "object.min": "VALIDATION_MIN_ONE_FIELD",
+    }),
 };
 
 export const studentIdSchema = {

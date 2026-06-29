@@ -14,21 +14,21 @@ const router = Router();
 router.get(
   "/",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("students"),
   studentController.getAllStudents,
 );
 
 router.get(
   "/stats",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("students"),
   studentController.getStudentsStats,
 );
 
 router.post(
   "/create",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("students"),
   validation(createStudentSchema),
   studentController.createStudent,
 );
@@ -36,7 +36,7 @@ router.post(
 router.get(
   "/:id",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("students"),
   validation(studentIdSchema),
   studentController.getStudentById,
 );
@@ -44,7 +44,7 @@ router.get(
 router.patch(
   "/update/:id",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("students"),
   validation(updateStudentSchema),
   studentController.updateStudent,
 );
@@ -52,7 +52,7 @@ router.patch(
 router.delete(
   "/:id",
   authentication(),
-  authorizeResource("users"),
+  authorizeResource("students"),
   validation(studentIdSchema),
   studentController.deleteStudent,
 );

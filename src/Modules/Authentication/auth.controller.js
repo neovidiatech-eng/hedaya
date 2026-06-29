@@ -2,6 +2,7 @@ import { googleVerify } from "../../Utils/GoogleClient/index.js";
 import sendEmailEvent from "../../Utils/Mailer/sendEmailEvent.js";
 import { redis } from "../../Utils/Radis/Connection.js";
 import * as db from "../../database/dbService.js";
+import { createAdminNotification } from "../Notifications/notifications.controller.js";
 
 import {
   asyncHandler,
@@ -17,6 +18,7 @@ import {
   encryptPassword,
   hash,
   looksEncrypted,
+  decryptUserSensitiveFields,
 } from "../../Utils/Security/index.js";
 import { generateOtp } from "../../Utils/Security/otp.js";
 import { sendEmail } from "../../Utils/Mailer/SendEmail.js";
@@ -36,6 +38,7 @@ export const register = asyncHandler(async (req, res, next) => {
     birth_date,
     gender,
     country,
+    nationality,
     timezone,
   } = req.body;
 
@@ -108,6 +111,8 @@ export const register = asyncHandler(async (req, res, next) => {
         code_country: codeCountry,
         timezone,
         roleId: userRole?.id ? userRole.id : null,
+        nationality,
+        country,
       },
     });
 
@@ -123,6 +128,7 @@ export const register = asyncHandler(async (req, res, next) => {
         birth_date,
         gender,
         country,
+        nationality,
         timezone,
         user_id: user.id,
       }),
@@ -339,11 +345,21 @@ export const verifyAccount = asyncHandler(async (req, res, next) => {
     model: "user",
     where: { email },
     data: { confirmAt: new Date().toISOString() },
+    include: { role: true },
   });
 
   if (!user) {
     return errorResponse({ req, next, message: "USER_NOT_FOUND", status: 404 });
   }
+
+  if (user?.role?.name === "student") {
+    await createAdminNotification({
+      title: "تم تسجيل طالب جديد",
+      message: `تم تسجيل طالب جديد: ${user.name} (${user.email}).`,
+      type: "new_student",
+    });
+  }
+
   return successResponse({
     res,
     req,
@@ -674,26 +690,36 @@ export const getLogs = asyncHandler(async (req, res, next) => {
     },
   });
 
-  const logsData = await Promise.all(
-    logs.map(async (log) => ({
-      ...log,
-      user: log.user
-        ? {
-            ...log.user,
-            password: await decryptPasswordForResponse(log.user.password),
-            phone: looksEncrypted(log.user.phone)
-              ? await decryptText({ text: log.user.phone })
-              : log.user.phone,
-          }
-        : log.user,
-    })),
+  await Promise.all(
+    logs.map(async (log) => {
+      if (log.user) {
+        await decryptUserSensitiveFields(log.user);
+      }
+    }),
   );
 
   return successResponse({
     res,
     req,
-    data: logsData,
+    data: logs,
     status: 200,
     message: "FETCH_SUCCESS",
+  });
+});
+
+export const saveFCM = asyncHandler(async (req, res, next) => {
+  const { fcmToken } = req.body;
+
+  await db.updateOne({
+    model: "user",
+    where: { id: req.user.id },
+    data: { fcmToken },
+  });
+
+  return successResponse({
+    res,
+    req,
+    status: 200,
+    message: "FCM_TOKEN_SAVED_SUCCESS",
   });
 });

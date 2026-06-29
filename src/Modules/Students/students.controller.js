@@ -6,25 +6,15 @@ import {
 import * as db from "../../database/dbService.js";
 import { ensureExists } from "../../database/genericService.js";
 import {
-  decryptPasswordForResponse,
-  decryptText,
+  decryptUserSensitiveFields,
   encryptPassword,
-  looksEncrypted,
 } from "../../Utils/Security/index.js";
+import { createAdminNotification } from "../Notifications/notifications.controller.js";
 
-const getStudentStats = async (where = {}) => {
-  const [totalCount, activeCount, inactiveCount] = await Promise.all([
-    db.count({ model: "student", where }),
-    db.count({ model: "student", where: { ...where, active: true } }),
-    db.count({ model: "student", where: { ...where, active: false } }),
-  ]);
+export const getAllStudents = asyncHandler(async (req, res, next) => {
+  const { search, country, plans, page = 1, limit = 10, active } = req.query;
 
-  return { totalCount, activeCount, inactiveCount };
-};
-
-const getStudentsWhere = ({ search, country, plans }) => {
   const where = {};
-
   if (search) {
     where.user = {
       OR: [
@@ -39,76 +29,76 @@ const getStudentsWhere = ({ search, country, plans }) => {
   if (plans) {
     where.planId = plans;
   }
-
-  return where;
-};
-
-export const getAllStudents = asyncHandler(async (req, res, next) => {
-  const { search, country, plans, page = 1, limit = 10, active } = req.query;
-
-  const statsWhere = getStudentsWhere({ search, country, plans });
-  const where = { ...statsWhere };
-
   if (active !== undefined) {
     where.active = active === "true";
   }
 
-  const { items: students, pagination } =
-    await db.findManyWithPaginationAndCount({
-      model: "student",
-      where,
-      page,
-      limit,
-      include: {
-        user: {
-          include: {
-            role: {
-              select: {
-                name: true,
+  const [{ items: students, pagination }, totalCount, activeCount] =
+    await Promise.all([
+      db.findManyWithPaginationAndCount({
+        model: "student",
+        where,
+        page,
+        limit,
+        include: {
+          user: {
+            include: {
+              role: {
+                select: {
+                  name: true,
+                },
               },
             },
           },
+          plan: true,
         },
-        plan: true,
-      },
-    });
+      }),
+      db.count({ model: "student" }),
+      db.count({ model: "student", where: { active: true } }),
+    ]);
+
   const studentsData = await Promise.all(
     students.map(async (student) => {
-      const phone = looksEncrypted(student.user.phone)
-        ? await decryptText({ text: student.user.phone })
-        : student.user.phone;
+      await decryptUserSensitiveFields(student.user);
       return {
         ...student,
         user: {
           ...student.user,
-          password: await decryptPasswordForResponse(student.user.password),
-          phone: phone,
         },
       };
     }),
   );
-  const stats = await getStudentStats(statsWhere);
 
   return successResponse({
     res,
     req,
     message: "FETCH_SUCCESS",
-    data: { studentsData, pagination, ...stats },
+    data: {
+      studentsData,
+      pagination,
+      totalCount,
+      activeCount,
+      inactiveCount: totalCount - activeCount,
+    },
     status: 200,
   });
 });
 
 export const getStudentsStats = asyncHandler(async (req, res, next) => {
-  const { search, country, plans } = req.query;
-  const stats = await getStudentStats(
-    getStudentsWhere({ search, country, plans }),
-  );
+  const [totalCount, activeCount] = await Promise.all([
+    db.count({ model: "student" }),
+    db.count({ model: "student", where: { active: true } }),
+  ]);
 
   return successResponse({
     res,
     req,
     message: "FETCH_SUCCESS",
-    data: stats,
+    data: {
+      totalCount,
+      activeCount,
+      inactiveCount: totalCount - activeCount,
+    },
     status: 200,
   });
 });
@@ -121,6 +111,7 @@ export const createStudent = asyncHandler(async (req, res, next) => {
     phone,
     phone_code,
     country,
+    nationality,
     planId,
     birth_date,
     gender,
@@ -128,15 +119,14 @@ export const createStudent = asyncHandler(async (req, res, next) => {
     timezone,
   } = req.body;
 
-  const [checkUserByEmail, checkPlan, studentRole] =
-    await Promise.all([
-      db.findOne({ model: "user", where: { email } }),
-      db.findOne({ model: "Plans", where: { id: planId } }),
-      db.findFirst({
-        model: "role",
-        where: { name: { equals: "student", mode: "insensitive" } },
-      }),
-    ]);
+  const [checkUserByEmail, checkPlan, studentRole] = await Promise.all([
+    db.findOne({ model: "user", where: { email } }),
+    db.findOne({ model: "Plans", where: { id: planId } }),
+    db.findFirst({
+      model: "role",
+      where: { name: { equals: "student", mode: "insensitive" } },
+    }),
+  ]);
 
   if (checkUserByEmail)
     return errorResponse({
@@ -175,6 +165,8 @@ export const createStudent = asyncHandler(async (req, res, next) => {
         phone,
         password: encryptedPassword,
         code_country: phone_code,
+        country,
+        nationality,
         status: "active",
         confirmAt: new Date(),
         timezone,
@@ -236,6 +228,12 @@ export const createStudent = asyncHandler(async (req, res, next) => {
     });
   });
 
+  await createAdminNotification({
+    title: "تم اضافة طالب جديد",
+    message: `تم اضافة طالب جديد: ${name} (${email}).`,
+    type: "new_student",
+  });
+
   return successResponse({
     res,
     req,
@@ -271,32 +269,27 @@ export const getStudentById = asyncHandler(async (req, res, next) => {
     }),
   ]);
   if (student) {
-    const uniqueTeachers = await Promise.all(
-      [...new Set(studentTeachers.map((teacher) => teacher.teacher.id))].map(
-        async (id) => {
-          const matchedTeacher = studentTeachers.find(
-            (teacher) => teacher.teacher.id === id,
-          );
-          return {
-            id,
-            name: matchedTeacher.teacher.user.name,
-            email: matchedTeacher.teacher.user.email,
-            phone: looksEncrypted(matchedTeacher.teacher.user.phone)
-              ? await decryptText({ text: matchedTeacher.teacher.user.phone })
-              : matchedTeacher.teacher.user.phone,
-          };
-        },
+    await decryptUserSensitiveFields(student.user);
+    await Promise.all(
+      studentTeachers.map((teacher) =>
+        decryptUserSensitiveFields(teacher.teacher.user),
       ),
     );
+
+    const uniqueTeachers = [
+      ...new Set(studentTeachers.map((teacher) => teacher.teacher.id)),
+    ].map((id) => {
+      return {
+        id,
+        name: studentTeachers.find((teacher) => teacher.teacher.id === id)
+          .teacher.user.name,
+        email: studentTeachers.find((teacher) => teacher.teacher.id === id)
+          .teacher.user.email,
+        phone: studentTeachers.find((teacher) => teacher.teacher.id === id)
+          .teacher.user.phone,
+      };
+    });
     student.teachers = uniqueTeachers;
-  }
-  if (student?.user) {
-    student.user.password = await decryptPasswordForResponse(
-      student.user.password,
-    );
-    student.user.phone = looksEncrypted(student.user.phone)
-      ? await decryptText({ text: student.user.phone })
-      : student.user.phone;
   }
   return successResponse({
     res,
@@ -315,11 +308,13 @@ export const updateStudent = asyncHandler(async (req, res, next) => {
     phone,
     phone_code,
     country,
+    nationality,
     planId,
     birth_date,
     gender,
     active,
     timezone,
+    password,
   } = req.body;
 
   const student = await ensureExists({
@@ -350,9 +345,21 @@ export const updateStudent = asyncHandler(async (req, res, next) => {
         status: 404,
       });
   }
+  let encryptedPassword;
+
+  password ? (encryptedPassword = encryptPassword({ password })) : null;
 
   // Update user record if needed
-  if (name || email || phone || phone_code || timezone) {
+  if (
+    name ||
+    email ||
+    phone ||
+    phone_code ||
+    country ||
+    nationality ||
+    timezone ||
+    password
+  ) {
     await db.updateOne({
       model: "user",
       where: { id: student.user_id },
@@ -361,7 +368,10 @@ export const updateStudent = asyncHandler(async (req, res, next) => {
         ...(email && { email }),
         ...(phone && { phone }),
         ...(phone_code && { code_country: phone_code }),
+        ...(country && { country }),
+        ...(nationality && { nationality }),
         ...(timezone && { timezone }),
+        ...(password && { password: encryptedPassword }),
       },
     });
   }
@@ -379,14 +389,7 @@ export const updateStudent = asyncHandler(async (req, res, next) => {
     include: { user: true, plan: true },
   });
 
-  if (updatedStudent?.user) {
-    updatedStudent.user.password = await decryptPasswordForResponse(
-      updatedStudent.user.password,
-    );
-    updatedStudent.user.phone = looksEncrypted(updatedStudent.user.phone)
-      ? await decryptText({ text: updatedStudent.user.phone })
-      : updatedStudent.user.phone;
-  }
+  await decryptUserSensitiveFields(updatedStudent.user);
 
   return successResponse({
     res,

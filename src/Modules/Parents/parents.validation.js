@@ -1,7 +1,7 @@
 import joi from "joi";
 import {
   generalFeilds,
-  validatePhoneNumberWithCountryCode,
+  validateInternationalPhoneLength,
 } from "../../Utils/GeneralFields/index.js";
 
 export const getAllParentsSchema = {
@@ -30,7 +30,14 @@ export const createParentSchema = {
       active: joi.boolean().optional(),
       students: joi.array().items(generalFeilds.id).optional(),
     })
-    .custom(validatePhoneNumberWithCountryCode("code_country"))
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "code_country",
+      }),
+    )
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+    })
     .required(),
 };
 
@@ -48,7 +55,14 @@ export const updateParentSchema = {
       active: joi.boolean().optional(),
       students: joi.array().items(generalFeilds.id).optional(),
     })
-    .custom(validatePhoneNumberWithCountryCode("code_country"))
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "code_country",
+      }),
+    )
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+    })
     .required(),
 };
 

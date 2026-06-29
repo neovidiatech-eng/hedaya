@@ -11,6 +11,7 @@ import {
   decryptText,
   looksEncrypted,
 } from "../../Utils/Security/index.js";
+import dayjs from "dayjs";
 
 export const getAllRoles = asyncHandler(async (req, res, next) => {
   const { search } = req.query;
@@ -253,10 +254,10 @@ export const deleteRole = asyncHandler(async (req, res, next) => {
 });
 
 export const getDashboard = asyncHandler(async (req, res, next) => {
-  const now = getNowUTC();
-  const startOfDay = now.startOf("day").toDate();
-  const endOfDay = now.endOf("day").toDate();
-  const sevenDaysAgo = now.subtract(7, "day").startOf("day").toDate();
+  const now = dayjs().tz(req.timezone || "Africa/Cairo");
+  const startOfDay = now.startOf("day").utc().toDate();
+  const endOfDay = now.endOf("day").utc().toDate();
+  const sevenDaysAgo = now.subtract(7, "day").startOf("day").utc().toDate();
 
   const [
     studentsCount,
@@ -326,7 +327,7 @@ export const getDashboard = asyncHandler(async (req, res, next) => {
   for (let i = 6; i >= 0; i--) {
     const date = now.subtract(i, "day").format("YYYY-MM-DD");
     const count = lastSevenDaysSessions.filter(
-      (s) => getNowUTC(s.start_time).format("YYYY-MM-DD") === date,
+      (s) => dayjs.utc(s.start_time).tz(req.timezone || "Africa/Cairo").format("YYYY-MM-DD") === date,
     ).length;
     sessionsPerDay.push({ date, count });
   }
@@ -377,9 +378,7 @@ export const getDashboard = asyncHandler(async (req, res, next) => {
         title: s.title,
         subject: s.subject?.name_en || "Subject",
         time: s.start_time,
-        display_start_time: formatSchedules(s, req.timezone).display_start_time,
-        display_end_time: formatSchedules(s, req.timezone).display_end_time,
-        display_timezone: req.timezone,
+        ...formatSchedules(s, req.timezone),
         teacher: s.teacher?.user?.name || "Teacher",
         student: s.student?.user?.name || "Student",
       })),
@@ -393,6 +392,7 @@ export const getDashboard = asyncHandler(async (req, res, next) => {
     message: "FETCH_SUCCESS",
   });
 });
+
 
 // --- Permission CRUD & Assignment ---
 

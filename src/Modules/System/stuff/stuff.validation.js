@@ -1,7 +1,7 @@
 import Joi from "joi";
 import {
   generalFeilds,
-  validatePhoneNumberWithCountryCode,
+  validateInternationalPhoneLength,
 } from "../../../Utils/GeneralFields/index.js";
 
 export const createStuffUserSchema = {
@@ -12,16 +12,34 @@ export const createStuffUserSchema = {
     phone: generalFeilds.phone.required(),
     code_country: generalFeilds.codeCountry.required(),
     roleId: generalFeilds.id.required(),
-  }).custom(validatePhoneNumberWithCountryCode("code_country")),
+  })
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "code_country",
+      }),
+    )
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+    }),
 };
 
 export const updateStuffUserSchema = {
   body: Joi.object({
-    name: generalFeilds.name.required(),
-    phone: generalFeilds.phone.required(),
-    code_country: generalFeilds.codeCountry.required(),
-    roleId: generalFeilds.id.required(),
-  }).custom(validatePhoneNumberWithCountryCode("code_country")),
+    name: generalFeilds.name.optional(),
+    phone: generalFeilds.phone.optional(),
+    code_country: generalFeilds.codeCountry.optional(),
+    roleId: generalFeilds.id.optional(),
+    password: generalFeilds.password.optional(),
+    email: generalFeilds.email.optional(),
+  })
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "code_country",
+      }),
+    )
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+    }),
 };
 
 export const deleteStuffUserSchema = {
@@ -54,6 +72,13 @@ export const addParentSchema = {
       timezone: Joi.string().optional(),
       students: Joi.array().items(generalFeilds.id).required(),
     })
-    .custom(validatePhoneNumberWithCountryCode("codeCountry"))
+    .custom(
+      validateInternationalPhoneLength({
+        codeCountryKey: "codeCountry",
+      }),
+    )
+    .messages({
+      "phone.e164Length": "PHONE_E164_MAX_LENGTH",
+    })
     .required(),
 };

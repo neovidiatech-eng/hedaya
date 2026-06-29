@@ -3,7 +3,6 @@ import {
   successResponse,
   errorResponse,
 } from "../../Utils/Response.js";
-import { getMessage } from "../../Utils/i18n.js";
 import {
   checkExist,
   getDatesBetweenUTC,
@@ -28,6 +27,7 @@ import {
 } from "../../Utils/Date/time.js";
 import dayjs from "dayjs";
 import { getSettingsData } from "../Settings/settings.controller.js";
+import { createAdminNotification, createNotification } from "../Notifications/notifications.controller.js";
 
 /* ------------------------------------------------------------------ */
 /*            Admin creates multiple sessions in one request            */
@@ -118,11 +118,12 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
     title,
     description,
     link,
-    notification_Time,
+    notification_Time = "10",
     notes,
     date,
     start_time,
   } = req.body;
+
   /* check if student and teacher exist */
   const [student, teacher, subject] = await Promise.all([
     db.findOne({
@@ -237,9 +238,12 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
   } else if (notification_Time === notificationType[2]) {
     reminderTime = new Date(startTime.getTime() - 30 * 60 * 1000);
     notificationJobType = "before 30 minutes";
-  } else {
+  } else if (notification_Time === notificationType[3]) {
     reminderTime = new Date(startTime.getTime() - 60 * 60 * 1000);
     notificationJobType = "before 60 minutes";
+  } else {
+    reminderTime = new Date(startTime.getTime() - 5 * 60 * 1000);
+    notificationJobType = "before 5 minutes";
   }
 
   const now = new Date();
@@ -252,12 +256,21 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
     });
   }
 
+  const [studentInfo, teacherInfo] = await Promise.all([
+    db.findOne({ model: "student", where: { id: studentId }, include: { user: true } }),
+    db.findOne({ model: "teacher", where: { id: teacherId }, include: { user: true } }),
+  ]);
+  await createAdminNotification({
+    title: "تم جدولة الجلسة",
+    message: `تم جدولة جلسة جديدة "${title}" للطالب: ${studentInfo?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
+    type: "session_created",
+  });
+
   return successResponse({
     res,
     req,
     data: {
       schedule: formatSchedules(newSchedule, req.timezone),
-      start_time_local: toLocal(newSchedule.start_time, req.timezone),
     },
     status: 201,
     message: "CREATE_SUCCESS",
@@ -309,13 +322,7 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
   // If count is not provided but student has sessions, we could use sessions_remaining as a default count if endDate is missing
   const effectiveCount = count || (endDate ? null : student.sessions_remaining);
 
-  let dates = getDatesBetweenUTC(
-    startDate,
-    endDate,
-    days,
-    effectiveCount,
-    req.timezone,
-  );
+  let dates = getDatesBetweenUTC(startDate, endDate, days, effectiveCount);
 
   // Session check for recurring: Cap the dates to the student's remaining sessions
   if (dates.length > student.sessions_remaining) {
@@ -423,11 +430,15 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
       end_time,
       subjectId: subject_id,
       is_recurring: true,
-      day_of_week: dayjs.utc(start_time).tz(req.timezone).format("dddd"),
+      day_of_week: dayjs.tz(date, req.timezone).format("dddd"),
       parent_recurring_id: parentRecurringId,
     });
 
-    notificationJobs.push({ start_time, notification_Time });
+    notificationJobs.push({
+      start_time,
+      notification_Time,
+      index: schedulesToCreate.length - 1,
+    });
   }
 
   // Atomically create all valid schedules + deduct sessions in one transaction
@@ -458,7 +469,11 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
 
     // Queue notification jobs after successful transaction
     const now = new Date();
-    for (const { start_time: st, notification_Time: nt } of notificationJobs) {
+    for (const {
+      start_time: st,
+      notification_Time: nt,
+      index,
+    } of notificationJobs) {
       let reminderTime;
       let notificationJobType;
       if (nt === notificationType[1]) {
@@ -473,19 +488,25 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
       }
       if (reminderTime > now) {
         addNotificationJob({
-          scheduleId:
-            createdSchedules[
-              notificationJobs.indexOf({
-                start_time: st,
-                notification_Time: nt,
-              })
-            ]?.id,
+          scheduleId: createdSchedules[index]?.id,
           studentId,
           type: notificationJobType,
           sendAt: reminderTime,
         });
       }
     }
+  }
+
+  if (createdSchedules.length > 0) {
+    const [studentInfo, teacherInfo] = await Promise.all([
+      db.findOne({ model: "student", where: { id: studentId }, include: { user: true } }),
+      db.findOne({ model: "teacher", where: { id: teacherId }, include: { user: true } }),
+    ]);
+    await createAdminNotification({
+      title: "تم جدولة الجلسات المتكررة",
+      message: `تم جدولة ${createdSchedules.length} جلسات متكررة للطالب: ${studentInfo?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
+      type: "session_created",
+    });
   }
 
   return successResponse({
@@ -655,6 +676,16 @@ export const deleteSchedule = asyncHandler(async (req, res, next) => {
     });
   });
 
+  const [studentInfo, teacherInfo] = await Promise.all([
+    db.findOne({ model: "student", where: { id: schedule.studentId }, include: { user: true } }),
+    db.findOne({ model: "teacher", where: { id: schedule.teacherId }, include: { user: true } }),
+  ]);
+  await createAdminNotification({
+    title: "تم إلغاء الجلسة",
+    message: `تم إلغاء الجلسة "${schedule.title}" للطالب: ${studentInfo?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
+    type: "session_cancelled",
+  });
+
   return successResponse({
     res,
     req,
@@ -720,6 +751,23 @@ export const deleteRecurringGroup = asyncHandler(async (req, res, next) => {
       where: { parent_recurring_id },
     });
   });
+
+  const firstSchedule = await db.findFirst({
+    model: "schedule",
+    where: { parent_recurring_id },
+    include: {
+      student: { include: { user: true } },
+      teacher: { include: { user: true } },
+    },
+  });
+
+  if (firstSchedule) {
+    await createAdminNotification({
+      title: "تم إلغاء الجلسات المتكررة",
+      message: `تم إلغاء جميع الجلسات المتكررة تحت المجموعة "${parent_recurring_id}" للطالب: ${firstSchedule.student?.user?.name || "Student"} مع المدرس: ${firstSchedule.teacher?.user?.name || "Teacher"}.`,
+      type: "session_cancelled",
+    });
+  }
 
   return successResponse({
     res,
@@ -845,9 +893,9 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
   if (scheduleUpdated || notification_Time || otherData.status) {
     await removeNotificationJob(id);
 
-    // Only add a new job if the session is still "planned"
+    // Only add a new job if the session is still "planned" or "scheduled"
     const currentStatus = otherData.status || updatedSchedule.status;
-    if (currentStatus === "planned") {
+    if (currentStatus === "planned" || currentStatus === "scheduled") {
       const effectiveNotificationTime = notification_Time || "60";
 
       let reminderTime;
@@ -874,6 +922,16 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
       }
     }
   }
+
+  const [studentInfo, teacherInfo] = await Promise.all([
+    db.findOne({ model: "student", where: { id: schedule.studentId }, include: { user: true } }),
+    db.findOne({ model: "teacher", where: { id: schedule.teacherId }, include: { user: true } }),
+  ]);
+  await createAdminNotification({
+    title: "تم تعديل الجلسة",
+    message: `تم تعديل الجلسة "${updatedSchedule.title}" للطالب: ${studentInfo?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
+    type: "session_updated",
+  });
 
   return successResponse({
     res,
@@ -964,15 +1022,12 @@ export const joinSession = asyncHandler(async (req, res, next) => {
     const isLate = rules.some((r) => diffMinutes >= r.lateMinutes);
     if (isLate) {
       updateData.isTeacherLate = true;
-      // Notify Admin (Simple record in notification table)
-      await db.create({
-        model: "notification",
-        data: {
-          userId: "admin", // Placeholder or fetch actual admin
-          title: req.t("NOTIFICATION_TEACHER_LATE_TITLE"),
-          message: req.t("NOTIFICATION_TEACHER_LATE_MSG", { id }),
-          type: "teacher_late",
-        },
+      // Notify Admin
+      await createNotification({
+        userId: "admin",
+        title: req.t("NOTIFICATION_TEACHER_LATE_TITLE"),
+        message: req.t("NOTIFICATION_TEACHER_LATE_MSG", { id }),
+        type: "teacher_late",
       });
     }
   }
@@ -983,7 +1038,7 @@ export const joinSession = asyncHandler(async (req, res, next) => {
     data: updateData,
   });
 
-  if (session.status === "scheduled") {
+  if (session.status === "scheduled" || session.status === "planned") {
     await db.updateOne({
       model: "schedule",
       where: { id },
@@ -1001,16 +1056,13 @@ export const joinSession = asyncHandler(async (req, res, next) => {
   });
 
   if (targetUser?.user?.id) {
-    await db.create({
-      model: "notification",
-      data: {
-        userId: targetUser.user.id,
-        title: req.t("NOTIFICATION_SESSION_JOINED_TITLE"),
-        message: req.t("NOTIFICATION_SESSION_JOINED_MSG", {
-          role: role === "student" ? req.t("STUDENT") : req.t("TEACHER"),
-        }),
-        type: "session_joined",
-      },
+    await createNotification({
+      userId: targetUser.user.id,
+      title: req.t("NOTIFICATION_SESSION_JOINED_TITLE"),
+      message: req.t("NOTIFICATION_SESSION_JOINED_MSG", {
+        role: role === "student" ? req.t("STUDENT") : req.t("TEACHER"),
+      }),
+      type: "session_joined",
     });
   }
 
@@ -1310,14 +1362,11 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 
   await updateAverageRating(revieweeId);
 
-  await db.create({
-    model: "notification",
-    data: {
-      userId: revieweeId,
-      title: req.t("NOTIFICATION_REVIEW_RECEIVED_TITLE"),
-      message: req.t("NOTIFICATION_REVIEW_RECEIVED_MSG", { rating }),
-      type: "review_received",
-    },
+  await createNotification({
+    userId: revieweeId,
+    title: req.t("NOTIFICATION_REVIEW_RECEIVED_TITLE"),
+    message: req.t("NOTIFICATION_REVIEW_RECEIVED_MSG", { rating }),
+    type: "review_received",
   });
 
   return successResponse({
@@ -1339,7 +1388,7 @@ async function finalizeSession(scheduleId, t) {
     where: { id: scheduleId },
     include: {
       scheduleLogs: true,
-      student: true,
+      student: { include: { user: true } },
       teacher: { include: { user: true } },
     },
   });
@@ -1363,20 +1412,19 @@ async function finalizeSession(scheduleId, t) {
 
   // Notify if missed
   if (newStatus === "missed") {
-    await db.create({
-      model: "notification",
-      data: {
-        userId: session.student.user_id,
-        title: t
-          ? t("NOTIFICATION_SESSION_MISSED_TITLE")
-          : getMessage("NOTIFICATION_SESSION_MISSED_TITLE", "en"),
-        message: t
-          ? t("NOTIFICATION_SESSION_MISSED_MSG", { title: session.title })
-          : getMessage("NOTIFICATION_SESSION_MISSED_MSG", "en", {
-              title: session.title,
-            }),
-        type: "session_missed",
-      },
+    await createNotification({
+      userId: session.student.user_id,
+      title: t ? t("NOTIFICATION_SESSION_MISSED_TITLE") : "Session Missed",
+      message: t
+        ? t("NOTIFICATION_SESSION_MISSED_MSG", { title: session.title })
+        : `The session ${session.title} was marked as missed.`,
+      type: "session_missed",
+    });
+
+    await createAdminNotification({
+      title: "تم تفويت الجلسة",
+      message: `تم تفويت الجلسة "${session.title}" بين الطالب: ${session.student.user?.name || "Student"} والمدرس: ${session.teacher.user?.name || "Teacher"}.`,
+      type: "session_missed",
     });
   }
 }
