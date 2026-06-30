@@ -252,7 +252,7 @@
   "ADMINS_CANNOT_SEND_MESSAGES": "لا يمكن للمسؤولين إرسال الرسائل",
   "RATE_LIMIT_EXCEEDED": "تم تجاوز الحد المسموح به للمعدل. يرجى الانتظار دقيقة.",
   "NOT_CONVERSATION_PARTICIPANT": "أنت لست مشاركاً في هذه المحادثة",
-  "EMAIL_DEFAULT_SUB": "إشعار من أكاديمية وعي",
+  "EMAIL_DEFAULT_SUB": "أكاديمية هداية - رمز التحقق",
   "EMAIL_BODY_TEXT": "رمز التحقق الخاص بك هو {{otp}}",
   "SUPER_ADMIN_CANNOT_BE_DELETED": "لا يمكن حذف المدير الرئيسي",
   "Role name must be a string": "اسم الدور يجب أن يكون نصاً",

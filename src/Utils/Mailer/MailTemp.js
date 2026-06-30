@@ -452,20 +452,21 @@ const createAcademyMailTemp = ({
         ? otpDigits
             .map(
               (digit) => `
-          <td style="padding:0 4px;">
-            <div style="
-              width:48px;
-              height:58px;
+          <td style="padding:0 6px;">
+            <div class="otp-digit-box" style="
+              width:50px;
+              height:60px;
               background: linear-gradient(145deg, #ffffff, ${colors.soft});
               border: 2px solid ${colors.light};
-              border-radius:12px;
-              font-size:28px;
+              border-radius:14px;
+              font-size:30px;
               font-weight:800;
               color:${colors.primaryDark};
-              line-height:58px;
+              line-height:60px;
               text-align:center;
               font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-              box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+              box-shadow: 0 4px 10px -2px rgba(0,0,0,0.05);
+              transition: all 0.2s ease;
             ">${digit}</div>
           </td>
         `
@@ -480,26 +481,30 @@ const createAcademyMailTemp = ({
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
   <title>${displayTitle}</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
   <style>
-    body,
-    table,
-    td,
-    p,
-    a,
-    li,
-    blockquote {
+    body, table, td, p, a, li, blockquote {
       -webkit-text-size-adjust: 100%;
       -ms-text-size-adjust: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    
+    body {
+      font-family: 'Inter', 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     }
 
     @keyframes fadeIn {
       from {
         opacity: 0;
-        transform: translateY(20px);
+        transform: translateY(16px);
       }
-
       to {
         opacity: 1;
         transform: translateY(0);
@@ -507,41 +512,70 @@ const createAcademyMailTemp = ({
     }
 
     @keyframes shimmer {
-      0% {
-        background-position: -1000px 0;
-      }
+      0% { background-position: -1000px 0; }
+      100% { background-position: 1000px 0; }
+    }
 
-      100% {
-        background-position: 1000px 0;
-      }
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-6px); }
     }
 
     .animated-card {
-      animation: fadeIn 0.6s ease-out;
+      animation: fadeIn 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .floating-icon {
+      animation: float 3s ease-in-out infinite;
+    }
+
+    .otp-digit-box:hover {
+      border-color: ${colors.primary} !important;
+      transform: scale(1.05);
+      box-shadow: 0 8px 16px -4px ${colors.shadow} !important;
+    }
+    
+    .cta-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px -6px ${colors.shadow} !important;
+    }
+
+    .feature-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.05) !important;
     }
 
     @media only screen and (max-width: 620px) {
       .email-container {
         width: 100% !important;
         margin: 0 auto !important;
+        border-radius: 16px !important;
       }
 
       .mobile-padding {
-        padding-left: 20px !important;
-        padding-right: 20px !important;
+        padding-left: 24px !important;
+        padding-right: 24px !important;
       }
 
       .otp-digit {
-        width: 40px !important;
-        height: 50px !important;
-        font-size: 22px !important;
-        line-height: 50px !important;
+        width: 42px !important;
+        height: 52px !important;
+        font-size: 24px !important;
+        line-height: 52px !important;
+      }
+      
+      .features-table td {
+        display: block !important;
+        width: 100% !important;
+        margin-bottom: 12px !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
       }
     }
   </style>
 </head>
 
-<body style="margin:0; padding:0; background:${colors.soft}; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+<body style="margin:0; padding:0; background-color:${colors.soft}; font-family:'Inter', 'Cairo', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
 
   <div style="display:none; font-size:1px; color:${colors.soft}; line-height:1px; max-height:0px; max-width:0px; opacity:0; overflow:hidden;">
     ${
@@ -559,7 +593,7 @@ const createAcademyMailTemp = ({
       <td align="center" style="padding:40px 15px;">
 
         <table role="presentation" class="email-container animated-card" width="600" cellpadding="0" cellspacing="0" border="0"
-          style="max-width:600px; width:100%; background:#FFFFFF; border-radius:24px; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.15);">
+          style="max-width:600px; width:100%; background:#FFFFFF; border-radius:28px; overflow:hidden; box-shadow: 0 20px 40px -15px rgba(15, 23, 42, 0.08), 0 0 0 1px ${colors.light};">
 
           <tr>
             <td style="height:6px; background:linear-gradient(90deg, ${colors.primary}, ${colors.secondary}, ${colors.accent}, ${colors.primary}); background-size:300% 100%; animation:shimmer 3s ease-in-out infinite;"></td>
@@ -568,14 +602,14 @@ const createAcademyMailTemp = ({
           <tr>
             <td>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
-                style="background:linear-gradient(135deg, ${colors.dark} 0%, ${colors.primary} 55%, ${colors.secondary} 100%);">
+                style="background:linear-gradient(135deg, ${colors.dark} 0%, ${colors.primaryDark} 50%, ${colors.primary} 100%);">
                 <tr>
-                  <td style="padding:34px 40px; text-align:center;">
-                    <p style="margin:0 0 6px 0; font-size:27px; font-weight:800; color:#FFFFFF; letter-spacing:0.5px;">
+                  <td style="padding:40px 40px 30px 40px; text-align:center;">
+                    <p style="margin:0 0 6px 0; font-size:28px; font-weight:800; color:#FFFFFF; letter-spacing:0.5px;">
                       ${academyDisplayName}
                     </p>
 
-                    <p style="margin:0; font-size:13px; color:${colors.soft}; font-weight:500; letter-spacing:1.8px; text-transform:uppercase;">
+                    <p style="margin:0; font-size:12px; color:${colors.light}; font-weight:600; letter-spacing:2px; text-transform:uppercase; opacity:0.9;">
                       ${isAr ? taglineAr : taglineEn}
                     </p>
                   </td>
@@ -595,25 +629,26 @@ const createAcademyMailTemp = ({
           <tr>
             <td class="mobile-padding" style="padding:20px 48px 36px 48px;">
 
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 24px auto;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 28px auto;">
                 <tr>
                   <td align="center">
-                    <div style="
-                      width:90px;
-                      height:90px;
-                      background:linear-gradient(145deg, ${colors.soft}, ${colors.light});
-                      border-radius:22px;
-                      box-shadow:0 10px 25px -5px ${colors.shadow};
+                    <div class="floating-icon" style="
+                      width:96px;
+                      height:96px;
+                      background:linear-gradient(145deg, #ffffff, ${colors.soft});
+                      border: 4px solid #ffffff;
+                      border-radius:24px;
+                      box-shadow: 0 16px 32px -8px ${colors.shadow};
                       text-align:center;
-                      line-height:90px;
+                      line-height:88px;
                     ">
-                      <span style="font-size:42px;">${icon}</span>
+                      <span style="font-size:46px; display:inline-block; vertical-align:middle; line-height:1;">${icon}</span>
                     </div>
                   </td>
                 </tr>
               </table>
 
-              <p style="margin:0 0 8px 0; font-size:15px; color:${colors.primary}; font-weight:700; text-transform:uppercase; letter-spacing:1.5px; text-align:center;">
+              <p style="margin:0 0 10px 0; font-size:14px; color:${colors.primary}; font-weight:700; text-transform:uppercase; letter-spacing:2px; text-align:center;">
                 ${
                   otp
                     ? isAr
@@ -625,12 +660,12 @@ const createAcademyMailTemp = ({
                 }
               </p>
 
-              <h1 style="margin:0 0 16px 0; font-size:30px; line-height:1.3; color:${colors.dark}; font-weight:800; text-align:center; letter-spacing:-0.5px;">
+              <h1 style="margin:0 0 20px 0; font-size:32px; line-height:1.25; color:${colors.dark}; font-weight:800; text-align:center; letter-spacing:-0.5px;">
                 ${displayTitle}
               </h1>
 
-              <p style="margin:0 0 28px 0; font-size:16px; line-height:1.7; color:${colors.muted}; text-align:center;">
-                ${isAr ? "مرحباً" : "Hi"} <strong style="color:${colors.dark};">${username}</strong>,
+              <p style="margin:0 0 32px 0; font-size:16px; line-height:1.8; color:${colors.muted}; text-align:center; padding: 0 10px;">
+                ${isAr ? "مرحباً" : "Hi"} <strong style="color:${colors.dark}; font-weight: 700;">${username}</strong>,
                 ${
                   otp
                     ? isAr
@@ -645,20 +680,26 @@ const createAcademyMailTemp = ({
               ${
                 otp
                   ? `
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 24px auto;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 28px auto;">
                 <tr>
                   <td align="center">
-                    <div style="background:linear-gradient(145deg, #ffffff, ${colors.soft}); border-radius:20px; padding:28px 20px; border:1px solid ${colors.light};">
+                    <div style="
+                      background: linear-gradient(145deg, #ffffff, ${colors.soft}); 
+                      border-radius:24px; 
+                      padding:32px 24px; 
+                      border:1px solid ${colors.light};
+                      box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+                    ">
                       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
                         <tr>
                           ${otpBoxesHtml}
                         </tr>
                       </table>
 
-                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px auto 0 auto;">
+                      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto 0 auto;">
                         <tr>
-                          <td style="background:linear-gradient(135deg, ${colors.light}, ${colors.accent}); padding:8px 16px; border-radius:50px;">
-                            <span style="font-size:13px; color:${colors.primaryDark}; font-weight:700;">
+                          <td style="background:${colors.light}; padding:10px 20px; border-radius:50px; box-shadow: 0 2px 6px rgba(0,0,0,0.03);">
+                            <span style="font-size:13px; color:${colors.primaryDark}; font-weight:700; letter-spacing:0.5px; display:inline-block; vertical-align:middle;">
                               ${isAr ? "⏱️ تنتهي الصلاحية خلال 10 دقائق" : "⏱️ Expires in 10 minutes"}
                             </span>
                           </td>
@@ -669,17 +710,25 @@ const createAcademyMailTemp = ({
                 </tr>
               </table>
 
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px auto;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 28px auto;">
                 <tr>
-                  <td style="background:${colors.warningBg}; border-radius:12px; padding:16px 20px; border-left:4px solid ${colors.secondary};">
+                  <td style="
+                    background:${colors.warningBg}; 
+                    border-radius:16px; 
+                    padding:18px 24px; 
+                    border-left:4px solid ${colors.accent};
+                    box-shadow: 0 4px 12px -2px rgba(217, 119, 6, 0.05);
+                  ">
                     <table cellpadding="0" cellspacing="0" border="0">
                       <tr>
-                        <td style="padding-right:12px;">
-                          <span style="font-size:20px;">🛡️</span>
+                        <td style="padding-right:12px; vertical-align:middle;">
+                          <span style="font-size:24px;">🛡️</span>
                         </td>
-                        <td>
-                          <p style="margin:0; font-size:13px; color:${colors.warningText}; line-height:1.5; font-weight:500;">
-                            <strong>${isAr ? "نصيحة أمان:" : "Security Tip:"}</strong>
+                        <td style="vertical-align:middle;">
+                          <p style="margin:0; font-size:13px; color:${colors.warningText}; line-height:1.6; font-weight:600;">
+                            <strong style="color:${colors.accent}; text-transform:uppercase; font-size:11px; letter-spacing:1px; display:block; margin-bottom:2px;">
+                              ${isAr ? "نصيحة أمان:" : "Security Tip:"}
+                            </strong>
                             ${
                               isAr
                                 ? "لا تشارك هذا الرمز مع أي شخص أبداً. فريقنا لن يطلب منك رمز التحقق الخاص بك."
@@ -699,10 +748,16 @@ const createAcademyMailTemp = ({
               ${
                 text
                   ? `
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px auto;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 28px auto;">
                 <tr>
-                  <td style="background:linear-gradient(145deg, ${colors.soft}, #ffffff); border-radius:16px; padding:24px; border:1px solid ${colors.light};">
-                    <p style="margin:0; font-size:15px; color:${colors.primaryDark}; line-height:1.7; text-align:center;">
+                  <td style="
+                    background: linear-gradient(145deg, ${colors.soft}, #ffffff); 
+                    border-radius:20px; 
+                    padding:24px 30px; 
+                    border:1px solid ${colors.light};
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+                  ">
+                    <p style="margin:0; font-size:15px; color:${colors.primaryDark}; line-height:1.8; text-align:center; font-weight:500;">
                       ${text}
                     </p>
                   </td>
@@ -712,20 +767,21 @@ const createAcademyMailTemp = ({
                   : ""
               }
 
-              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:10px auto 0 auto;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px auto 0 auto;">
                 <tr>
                   <td align="center">
-                    <a href="${process.env.FRONTEND_URL || "http://localhost:4200"}/#/" target="_blank" style="
+                    <a href="${process.env.FRONTEND_URL || "http://localhost:4200"}/#/" target="_blank" class="cta-btn" style="
                       display:inline-block;
-                      padding:16px 40px;
-                      background:linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 55%, ${colors.accent} 100%);
-                      border-radius:14px;
+                      padding:18px 44px;
+                      background:linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 50%, ${colors.primaryDark} 100%);
+                      border-radius:16px;
                       color:#FFFFFF;
                       text-decoration:none;
-                      font-size:15px;
+                      font-size:16px;
                       font-weight:700;
-                      box-shadow:0 10px 25px -5px ${colors.shadow};
-                      letter-spacing:0.3px;
+                      box-shadow:0 12px 30px -8px ${colors.shadow};
+                      letter-spacing:0.5px;
+                      transition: all 0.2s ease;
                     ">
                       ${isAr ? "الدخول إلى الأكاديمية ←" : "Go to Academy →"}
                     </a>
@@ -738,30 +794,48 @@ const createAcademyMailTemp = ({
 
           <tr>
             <td class="mobile-padding" style="padding:0 48px 36px 48px;">
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <table role="presentation" class="features-table" width="100%" cellpadding="0" cellspacing="0" border="0">
                 <tr>
                   <td width="33%" style="text-align:center; padding:0 8px;">
-                    <div style="background:${colors.soft}; border-radius:14px; padding:20px 12px;">
-                      <span style="font-size:28px;">🤲</span>
-                      <p style="margin:10px 0 0 0; font-size:12px; color:${colors.primaryDark}; font-weight:700;">
+                    <div class="feature-card" style="
+                      background:${colors.soft}; 
+                      border-radius:18px; 
+                      padding:24px 12px;
+                      border:1px solid ${colors.light};
+                      transition: all 0.2s ease;
+                    ">
+                      <span style="font-size:32px; display:block; margin-bottom:8px;">🤲</span>
+                      <p style="margin:0; font-size:13px; color:${colors.primaryDark}; font-weight:700;">
                         ${isAr ? "ثقة" : "Trusted"}
                       </p>
                     </div>
                   </td>
 
                   <td width="33%" style="text-align:center; padding:0 8px;">
-                    <div style="background:${colors.warningBg}; border-radius:14px; padding:20px 12px;">
-                      <span style="font-size:28px;">🌙</span>
-                      <p style="margin:10px 0 0 0; font-size:12px; color:${colors.secondary}; font-weight:700;">
+                    <div class="feature-card" style="
+                      background:${colors.warningBg}; 
+                      border-radius:18px; 
+                      padding:24px 12px;
+                      border:1px solid ${colors.warningBg};
+                      transition: all 0.2s ease;
+                    ">
+                      <span style="font-size:32px; display:block; margin-bottom:8px;">🌙</span>
+                      <p style="margin:0; font-size:13px; color:${colors.warningText}; font-weight:700;">
                         ${isAr ? "تعلم مرن" : "Flexible"}
                       </p>
                     </div>
                   </td>
 
                   <td width="33%" style="text-align:center; padding:0 8px;">
-                    <div style="background:${colors.light}; border-radius:14px; padding:20px 12px;">
-                      <span style="font-size:28px;">📖</span>
-                      <p style="margin:10px 0 0 0; font-size:12px; color:${colors.primaryDark}; font-weight:700;">
+                    <div class="feature-card" style="
+                      background:${colors.soft}; 
+                      border-radius:18px; 
+                      padding:24px 12px;
+                      border:1px solid ${colors.light};
+                      transition: all 0.2s ease;
+                    ">
+                      <span style="font-size:32px; display:block; margin-bottom:8px;">📖</span>
+                      <p style="margin:0; font-size:13px; color:${colors.primaryDark}; font-weight:700;">
                         ${isAr ? "إتقان" : "Excellence"}
                       </p>
                     </div>
@@ -812,17 +886,17 @@ const hedayaMailTemp = createAcademyMailTemp({
   taglineAr: "تعلم بهداية نحو مستقبل أفضل",
   icon: "✨",
   colors: {
-    primary: "#2563EB",
-    primaryDark: "#1E3A8A",
-    secondary: "#7C3AED",
-    accent: "#A855F7",
-    dark: "#172554",
-    soft: "#EFF6FF",
-    light: "#DBEAFE",
+    primary: "#0D9488",
+    primaryDark: "#115E59",
+    secondary: "#059669",
+    accent: "#D97706",
+    dark: "#0F172A",
+    soft: "#F0FDFA",
+    light: "#CCFBF1",
     muted: "#64748B",
-    warningBg: "#F5F3FF",
-    warningText: "#5B21B6",
-    shadow: "rgba(37, 99, 235, 0.35)",
+    warningBg: "#FEF3C7",
+    warningText: "#92400E",
+    shadow: "rgba(13, 148, 136, 0.25)",
   },
 });
 

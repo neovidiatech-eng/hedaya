@@ -252,7 +252,7 @@
   "ADMINS_CANNOT_SEND_MESSAGES": "Admins cannot send messages",
   "RATE_LIMIT_EXCEEDED": "Rate limit exceeded. Please wait a minute.",
   "NOT_CONVERSATION_PARTICIPANT": "You are not a participant in this conversation",
-  "EMAIL_DEFAULT_SUB": "Waai Academy notification",
+  "EMAIL_DEFAULT_SUB": "Hedaya Academy - Verification Code",
   "EMAIL_BODY_TEXT": "Your verification code is {{otp}}",
   "SUPER_ADMIN_CANNOT_BE_DELETED": "Super admin cannot be deleted",
   "Role name must be a string": "Role name must be a string",
