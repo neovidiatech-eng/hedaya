@@ -24,6 +24,7 @@ model user {
   provider             String                  @default("local")
   timezone             String?                 @default("Africa/Cairo")
   fcmToken             String?                 @default("")
+  notes                String?                 @default("")
   reviewsReceived      Review[]                @relation("ReviewsReceived")
   reviewsGiven         Review[]                @relation("ReviewsGiven")
   subscriptions        Subscription[]

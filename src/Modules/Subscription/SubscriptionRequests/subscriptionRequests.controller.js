@@ -45,7 +45,9 @@ export const getSubscriptionRequests = asyncHandler(async (req, res, next) => {
   // Decrypt phone numbers for display
   for (let s of subscriptionRequests) {
     if (s.user && s.user.phone && s.user.phone !== "null") {
-      s.user.phone = looksEncrypted(s.user.phone) ? await decryptText({ text: s.user.phone }) : s.user.phone;
+      s.user.phone = looksEncrypted(s.user.phone)
+        ? await decryptText({ text: s.user.phone })
+        : s.user.phone;
     }
     if (s.user && s.user.password) {
       s.user.password = await decryptPasswordForResponse(s.user.password);
@@ -126,6 +128,11 @@ export const changeStatus = asyncHandler(async (req, res, next) => {
           status: status === "approved" ? "active" : "rejected",
           ...(status === "approved" &&
             studentRole && { roleId: studentRole.id }),
+          ...(status === "rejected" && {
+            email: `${Date.now()}-rejected-${subscriptionRequest.user_id}`,
+          }),
+          notes: status === "rejected" ? subscriptionRequest.notes : null,
+          
         },
       });
 
@@ -159,8 +166,7 @@ export const changeStatus = asyncHandler(async (req, res, next) => {
           country: parsedStudentData.country,
           plan: { connect: { id: subscriptionRequest.planId } },
           sessions: subscriptionRequest.plan?.sessionsCount || 0,
-          sessions_remaining:
-            subscriptionRequest.plan?.sessionsCount || 0,
+          sessions_remaining: subscriptionRequest.plan?.sessionsCount || 0,
           status: "approved",
           active: true,
         },
@@ -211,10 +217,7 @@ export const changeStatus = asyncHandler(async (req, res, next) => {
     return successResponse({
       res,
       req,
-      message:
-        status === "approved"
-          ? "REQUEST_APPROVED"
-          : "REQUEST_REJECTED",
+      message: status === "approved" ? "REQUEST_APPROVED" : "REQUEST_REJECTED",
       status: 200,
     });
   } catch (error) {

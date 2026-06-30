@@ -24,6 +24,7 @@ export const registeritonSchema = {
         })
         .required(),
       timezone: Joi.string().optional(),
+      notes: Joi.string().min(1).max(500).optional(),
     })
     .custom(
       validateInternationalPhoneLength({

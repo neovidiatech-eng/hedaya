@@ -40,6 +40,7 @@ export const register = asyncHandler(async (req, res, next) => {
     country,
     nationality,
     timezone,
+    notes,
   } = req.body;
 
   // 1. Initial validations (Check existence outside transaction to keep it short)
@@ -113,6 +114,7 @@ export const register = asyncHandler(async (req, res, next) => {
         roleId: userRole?.id ? userRole.id : null,
         nationality,
         country,
+        notes
       },
     });
 
@@ -131,9 +133,10 @@ export const register = asyncHandler(async (req, res, next) => {
         nationality,
         timezone,
         user_id: user.id,
+        notes,
       }),
     );
-    await redis.expire(`${email}_Student_data`, 60 * 60 * 24);
+    await redis.expire(`${email}_Student_data`, 60 * 60 * 24 * 2);
 
     // Create Subscription Request if a plan is selected
     if (plan_id) {
