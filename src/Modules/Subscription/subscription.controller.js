@@ -5,9 +5,15 @@ import { asyncHandler, errorResponse, successResponse } from "../../Utils/Respon
 import { decryptText, looksEncrypted } from "../../Utils/Security/index.js";
 
 export const getallSubscriptions = asyncHandler(async (req, res, next) => {
+  const {sessionRemaining} = req.query;
+const where = {}
+if (sessionRemaining) {
+  where.user = {student: {sessions_remaining: parseFloat(sessionRemaining)}}
+}
   
   const subscriptions = await db.findManyWithPaginationAndCount({
     model: "Subscription",
+    where,
     include: {
       user: {
         include: {

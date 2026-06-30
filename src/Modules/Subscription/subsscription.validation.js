@@ -9,3 +9,8 @@ export const renewSubscription = {
     plan_id: generalFeilds.id.required(),
   }),
 };
+export const getallSubscriptions = {
+  query: Joi.object({
+    sessionRemaining: Joi.number().optional(),
+  }),
+};

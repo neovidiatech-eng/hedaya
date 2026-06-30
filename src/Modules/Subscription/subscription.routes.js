@@ -12,6 +12,7 @@ router.use("/requests", subscriptionsRequestsRouter);
 router.get(
   "/",
   authentication(),
+  validation(schema.getallSubscriptions),
   authorizeResource("subscriptions"),
   sub.getallSubscriptions,
 );
