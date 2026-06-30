@@ -14,7 +14,7 @@ export const registeritonSchema = {
       birth_date: generalFeilds.birth_date.required(),
       gender: generalFeilds.gender.required(),
       country: generalFeilds.country.required(),
-      nationality: generalFeilds.nationality.required(),
+      nationality: generalFeilds.nationality.optional(),
       phone: generalFeilds.phone.required(),
       plan_id: generalFeilds.id
         .messages({
