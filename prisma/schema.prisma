@@ -110,10 +110,10 @@ model Plans {
   id                   String                  @id @default(uuid())
   name_en              String                  @unique
   name_ar              String                  @unique
-  description          String
+  description          String?                 @default("")
   price                String
   duration             Int
-  features             String[]
+  features             String[]               @default([])
   currencyId           String?
   createdAt            DateTime                @default(now())
   updatedAt            DateTime                @updatedAt
