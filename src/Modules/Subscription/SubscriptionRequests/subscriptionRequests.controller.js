@@ -129,7 +129,7 @@ export const changeStatus = asyncHandler(async (req, res, next) => {
           ...(status === "approved" &&
             studentRole && { roleId: studentRole.id }),
           ...(status === "rejected" && {
-            email: `${Date.now()}-rejected-${subscriptionRequest.user_id}`,
+            email: `${subscriptionRequest.user.email.split("@")[0]}-rejected`,
           }),
           notes: status === "rejected" ? subscriptionRequest.notes : null,
           
