@@ -11,6 +11,7 @@ import {
   looksEncrypted,
 } from "../../../Utils/Security/index.js";
 import { ensureExists } from "../../../database/genericService.js";
+import { nanoid } from "nanoid";
 
 export const getSubscriptionRequests = asyncHandler(async (req, res, next) => {
   const { search, status, page = 1, limit = 10 } = req.query;
@@ -129,7 +130,7 @@ export const changeStatus = asyncHandler(async (req, res, next) => {
           ...(status === "approved" &&
             studentRole && { roleId: studentRole.id }),
           ...(status === "rejected" && {
-            email: `${subscriptionRequest.user.email.split("@")[0]}-rejected`,
+            email: `${subscriptionRequest.user.email.split("@")[0]}-rejected-${nanoid(3)}`,
           }),
           notes: status === "rejected" ? subscriptionRequest.notes : null,
           
