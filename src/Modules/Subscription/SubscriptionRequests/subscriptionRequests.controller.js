@@ -14,7 +14,7 @@ import { ensureExists } from "../../../database/genericService.js";
 import { nanoid } from "nanoid";
 
 export const getSubscriptionRequests = asyncHandler(async (req, res, next) => {
-  const { search, status, page = 1, limit = 10 } = req.query;
+  const { search, status, page = 1, limit = 10, sessions_filter } = req.query;
 
   let where = {};
   if (search) {
@@ -30,6 +30,29 @@ export const getSubscriptionRequests = asyncHandler(async (req, res, next) => {
   if (status) {
     where.status = status;
   }
+
+  // فلتر الحصص المتبقية للطالب
+  // needs_renewal → الطالب حضر على الأقل حصة واحدة وخلّص كل الحصص
+  //                 (sessions_remaining = 0 AND sessions_attended > 0)
+  //                 يتجنب الـ batch-created اللي sessions_remaining = 0 بس لسه محضرش
+  // has_remaining → الطالب لسه عنده حصص متبقية (sessions_remaining > 0)
+  if (sessions_filter === "needs_renewal") {
+    where.user = {
+      ...where.user,
+      student: {
+        sessions_remaining: { equals: 0 },
+        sessions_attended: { gt: 0 },
+      },
+    };
+  } else if (sessions_filter === "has_remaining") {
+    where.user = {
+      ...where.user,
+      student: { sessions_remaining: { gt: 0 } },
+    };
+  }
+
+
+
 
   const { items: subscriptionRequests, pagination } =
     await db.findManyWithPaginationAndCount({
@@ -54,13 +77,33 @@ export const getSubscriptionRequests = asyncHandler(async (req, res, next) => {
       s.user.password = await decryptPasswordForResponse(s.user.password);
     }
   }
+let filteredSubscriptionRequestsCount=0
+  if(sessions_filter){
+filteredSubscriptionRequestsCount =await db.count({
+  model:"subscription_requests",
+  where:{
+    status:"pending",
+    user:{
+      status:"active",
+      student:{
+        sessions_remaining:{
+          equals:0
+        },
+        sessions_attended:{
+          gt:0
+        }
+      }
+    }
+  }
+})
+  }
 
   return successResponse({
     res,
     req,
     message: "FETCH_SUCCESS",
     status: 200,
-    data: { subscriptionRequests, pagination },
+    data: { subscriptionRequests, pagination ,filterdCount:filteredSubscriptionRequestsCount!==0? filteredSubscriptionRequestsCount:null },
   });
 });
 
