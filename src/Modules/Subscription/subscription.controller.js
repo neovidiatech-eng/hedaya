@@ -5,11 +5,23 @@ import { asyncHandler, errorResponse, successResponse } from "../../Utils/Respon
 import { decryptText, looksEncrypted } from "../../Utils/Security/index.js";
 
 export const getallSubscriptions = asyncHandler(async (req, res, next) => {
-  const {sessionRemaining} = req.query;
-const where = {}
-if (sessionRemaining) {
-  where.user = {student: {sessions_remaining: parseFloat(sessionRemaining)}}
-}
+  const { sessions_filter } = req.query;
+  const where = {};
+
+  // needs_renewal → حضر على الأقل حصة وخلّص كل الحصص (remaining=0 & attended>0)
+  // has_remaining → لسه عنده حصص متبقية (remaining>0)
+  if (sessions_filter === "needs_renewal") {
+    where.user = {
+      student: {
+        sessions_remaining: { equals: 0 },
+        sessions_attended: { gt: 0 },
+      },
+    };
+  } else if (sessions_filter === "has_remaining") {
+    where.user = {
+      student: { sessions_remaining: { gt: 0 } },
+    };
+  }
   
   const subscriptions = await db.findManyWithPaginationAndCount({
     model: "Subscription",
@@ -28,6 +40,25 @@ if (sessionRemaining) {
     model: "Subscription",
     where: { status: "pending" },
   });
+  let filterdCount
+  if(sessions_filter){
+const filterdCount = await db.count({
+  model:"Subscription",
+  where:{
+    user:{
+      status:"active",
+      student:{
+        sessions_remaining:{
+          equals:0
+        },
+        sessions_attended:{
+          gt:0
+        }
+      }
+    }
+  }
+})
+  }
   
 
   const subscriptionsData = await Promise.all(
@@ -82,7 +113,7 @@ if (sessionRemaining) {
   return successResponse({
     res,
     req,
-    data: {subscriptionsData ,pendingSubscriptions, ...subscriptions.pagination},
+    data: {subscriptionsData ,pendingSubscriptions,filterdCount:filterdCount!==0? filterdCount:null, ...subscriptions.pagination},
     message: "SUBSCRIPTIONS_FETCHED",
     status: 200,
   });

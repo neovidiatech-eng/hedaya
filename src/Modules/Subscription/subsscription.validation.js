@@ -11,6 +11,9 @@ export const renewSubscription = {
 };
 export const getallSubscriptions = {
   query: Joi.object({
-    sessionRemaining: Joi.number().optional(),
+    sessions_filter: Joi.string().valid("needs_renewal", "has_remaining").optional().messages({
+      "string.base": "SESSIONS_FILTER_STRING",
+      "any.only": "SESSIONS_FILTER_NEEDS_RENEWAL_HAS_REMAINING",
+    }),
   }),
 };

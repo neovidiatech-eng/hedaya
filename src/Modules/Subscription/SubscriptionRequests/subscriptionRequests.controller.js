@@ -36,20 +36,6 @@ export const getSubscriptionRequests = asyncHandler(async (req, res, next) => {
   //                 (sessions_remaining = 0 AND sessions_attended > 0)
   //                 يتجنب الـ batch-created اللي sessions_remaining = 0 بس لسه محضرش
   // has_remaining → الطالب لسه عنده حصص متبقية (sessions_remaining > 0)
-  if (sessions_filter === "needs_renewal") {
-    where.user = {
-      ...where.user,
-      student: {
-        sessions_remaining: { equals: 0 },
-        sessions_attended: { gt: 0 },
-      },
-    };
-  } else if (sessions_filter === "has_remaining") {
-    where.user = {
-      ...where.user,
-      student: { sessions_remaining: { gt: 0 } },
-    };
-  }
 
 
 
@@ -77,26 +63,7 @@ export const getSubscriptionRequests = asyncHandler(async (req, res, next) => {
       s.user.password = await decryptPasswordForResponse(s.user.password);
     }
   }
-let filteredSubscriptionRequestsCount=0
-  if(sessions_filter){
-filteredSubscriptionRequestsCount =await db.count({
-  model:"subscription_requests",
-  where:{
-    status:"pending",
-    user:{
-      status:"active",
-      student:{
-        sessions_remaining:{
-          equals:0
-        },
-        sessions_attended:{
-          gt:0
-        }
-      }
-    }
-  }
-})
-  }
+
 
   return successResponse({
     res,

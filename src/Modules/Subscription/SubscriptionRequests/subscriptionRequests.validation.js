@@ -11,10 +11,7 @@ export const getSubscription = {
       "string.base": "STATUS_STRING",
       "any.only": "STATUS_PENDING_REJECTED_APPROVED",
     }),
-    sessions_filter: joi.string().valid("needs_renewal", "has_remaining").optional().messages({
-      "string.base": "SESSIONS_FILTER_STRING",
-      "any.only": "SESSIONS_FILTER_NEEDS_RENEWAL_HAS_REMAINING",
-    }), 
+  
   }),
 };
 export const changeStatus = {
