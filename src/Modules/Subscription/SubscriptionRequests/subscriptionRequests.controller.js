@@ -70,7 +70,7 @@ export const getSubscriptionRequests = asyncHandler(async (req, res, next) => {
     req,
     message: "FETCH_SUCCESS",
     status: 200,
-    data: { subscriptionRequests, pagination ,filterdCount:filteredSubscriptionRequestsCount!==0? filteredSubscriptionRequestsCount:null },
+    data: { subscriptionRequests, pagination },
   });
 });
 
