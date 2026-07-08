@@ -357,6 +357,70 @@ export const getTeacher = asyncHandler(async (req, res, next) => {
     data: teacherData,
   });
 });
+export const getTeacherStats = asyncHandler(async (req, res, next) => {
+  const { id } = req.params;
+  const {startMonth,endMonth}=req.query
+  const teacher = await ensureExists({
+    model: "teacher",
+    where: { id },
+    include: {
+      user: {
+        include:{
+          wallet:true
+        }
+      },
+      currency: true,
+      teacherSubjects: {
+        include: { subject: true },
+      },
+    },
+    message: "TEACHER_NOT_FOUND",
+  });
+
+  await decryptUserSensitiveFields(teacher.user);
+
+  // Calculate teacher stats
+
+  const completedSessionsCount = await db.count({
+    model: "schedule",
+    where: {
+      teacherId: id,
+      status: "completed",
+      start_time: {
+        gte: new Date(startMonth),
+        lte: new Date(endMonth),
+      },
+    },
+  });
+
+
+
+
+
+  const WithdrawalsResult = await db.findMany({
+    model: "WithdrawalRequest",
+    where: {
+      teacherId: teacher.user_id,
+      createdAt: {
+        gte: new Date(startMonth),
+        lte: new Date(endMonth),
+      },
+    },
+  });
+
+  const teacherData = {
+    ...teacher,
+    WithdrawalsResult,
+    completedSessionsCount
+  };
+
+  return successResponse({
+    res,
+    req,
+    message: "FETCH_SUCCESS",
+    data: teacherData,
+  });
+});
 
 export const updateTeacher = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
@@ -530,4 +594,211 @@ export const getMyStudents = asyncHandler(async (req, res, next) => {
     message: "FETCH_SUCCESS",
     data: students,
   });
+});
+
+
+// Helper – wrap a cell value so commas/quotes/newlines don't break the CSV
+const escapeCsvCell = (value) => {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (str.includes('"') || str.includes(",") || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+};
+
+const buildCsvRow = (cells) => cells.map(escapeCsvCell).join(",");
+
+export const exportTeachersCsv = asyncHandler(async (req, res) => {
+  const tz = req.timezone || "Africa/Cairo";
+  const nowLocal = dayjs().tz(tz);
+  const startOfDay = nowLocal.startOf("day").utc().toDate();
+  const endOfDay = nowLocal.endOf("day").utc().toDate();
+
+  // Fetch all teachers with user + currency + subjects
+  const teachers = await db.findMany({
+    model: "teacher",
+    orderBy: { createdAt: "desc" },
+    include: {
+      user: true,
+      currency: true,
+      teacherSubjects: { include: { subject: true } },
+    },
+  });
+
+  // Decrypt sensitive fields for all teachers in parallel
+  await Promise.all(teachers.map((t) => decryptUserSensitiveFields(t.user)));
+
+  // Build stats for every teacher concurrently
+  const enriched = await Promise.all(
+    teachers.map(async (teacher) => {
+      const id = teacher.id;
+
+      const [
+        uniqueStudents,
+        completedSessionsCount,
+        todaySessionsCount,
+        upcomingSessionsCount,
+        completedSchedules,
+        pendingSchedules,
+        wallet,
+        pendingWithdrawalsResult,
+      ] = await Promise.all([
+        db.findMany({
+          model: "schedule",
+          where: { teacherId: id },
+          distinct: ["studentId"],
+          select: { studentId: true },
+        }),
+        db.count({
+          model: "schedule",
+          where: { teacherId: id, status: "completed" },
+        }),
+        db.count({
+          model: "schedule",
+          where: {
+            teacherId: id,
+            start_time: { gte: startOfDay, lte: endOfDay },
+          },
+        }),
+        db.count({
+          model: "schedule",
+          where: {
+            teacherId: id,
+            status: { in: ["scheduled", "planned"] },
+            start_time: { gte: nowLocal.utc().toDate() },
+          },
+        }),
+        db.findMany({
+          model: "schedule",
+          where: { teacherId: id, status: "completed" },
+          select: { start_time: true, end_time: true },
+        }),
+        db.findMany({
+          model: "schedule",
+          where: {
+            teacherId: id,
+            status: { in: ["scheduled", "ongoing", "planned"] },
+          },
+          select: { start_time: true, end_time: true },
+        }),
+        db.findFirst({
+          model: "Wallet",
+          where: { userId: teacher.user_id, type: "teacher" },
+        }),
+        db.findMany({
+          model: "WithdrawalRequest",
+          where: { teacherId: teacher.user_id, status: "pending" },
+          select: { amount: true },
+        }),
+      ]);
+
+      const calcHours = (schedules) =>
+        schedules.reduce((total, s) => {
+          const diffMs = new Date(s.end_time) - new Date(s.start_time);
+          return total + diffMs / (1000 * 60 * 60);
+        }, 0);
+
+      const completedHours = calcHours(completedSchedules);
+      const pendingHours = calcHours(pendingSchedules);
+      const totalHours = completedHours + pendingHours;
+      const completedEarnings = completedHours * teacher.hour_price;
+      const pendingEarnings = pendingHours * teacher.hour_price;
+      const totalEarnings = completedEarnings + pendingEarnings;
+      const availableBalance = wallet ? wallet.balance : 0;
+      const pendingWithdrawals = pendingWithdrawalsResult.reduce(
+        (sum, w) => sum + w.amount,
+        0,
+      );
+      const totalDue = availableBalance + pendingEarnings;
+
+      return {
+        teacher,
+        stats: {
+          totalStudents: uniqueStudents.length,
+          completedSessions: completedSessionsCount,
+          todaySessions: todaySessionsCount,
+          upcomingSessions: upcomingSessionsCount,
+          totalHours,
+          completedHours,
+          pendingHours,
+          totalEarnings,
+          completedEarnings,
+          pendingEarnings,
+          availableBalance,
+          pendingWithdrawals,
+          totalDue,
+        },
+      };
+    }),
+  );
+
+  // CSV headers
+  const headers = [
+    "ID",
+    "الاسم",
+    "البريد الإلكتروني",
+    "رقم الهاتف",
+    "الدولة",
+    "النوع",
+    "سعر الساعة",
+    "العملة",
+    "المواد",
+    "نشط",
+    "تاريخ الانضمام",
+    "إجمالي الطلاب",
+    "الجلسات المكتملة",
+    "جلسات اليوم",
+    "إجمالي الساعات",
+    "الساعات المكتملة",
+    "إجمالي الأرباح",
+    "الأرباح المكتملة",
+    "الرصيد المتاح",
+    "السحوبات المعلقة",
+    "إجمالي المستحق",
+  ];
+  const rows = [buildCsvRow(headers)];
+
+  for (const { teacher, stats } of enriched) {
+    const subjects = (teacher.teacherSubjects || [])
+      .map((ts) => ts.subject?.name_en || ts.subject?.name_ar || "")
+      .filter(Boolean)
+      .join(" | ");
+
+    rows.push(
+      buildCsvRow([
+        teacher.id,
+        teacher.user?.name,
+        teacher.user?.email,
+        `${teacher.user?.code_country || ""}${teacher.user?.phone || ""}`,
+        teacher.user?.country,
+        teacher.gender,
+        teacher.hour_price,
+        teacher.currency?.code || teacher.currency?.name_en || "",
+        subjects,
+        teacher.active ? "نعم" : "لا",
+        teacher.createdAt
+          ? new Date(teacher.createdAt).toISOString().slice(0, 10)
+          : "",
+        stats.totalStudents,
+        stats.completedSessions,
+        stats.todaySessions,
+        stats.totalHours.toFixed(2),
+        stats.completedHours.toFixed(2),
+        stats.totalEarnings.toFixed(2),
+        stats.completedEarnings.toFixed(2),
+        stats.availableBalance.toFixed(2),
+        stats.pendingWithdrawals.toFixed(2),
+        stats.totalDue.toFixed(2),
+      ]),
+    );
+  }
+
+  const csvContent = rows.join("\r\n");
+  const filename = `teachers_${new Date().toISOString().slice(0, 10)}.csv`;
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+  // BOM for Excel UTF-8 compatibility
+  res.send("\uFEFF" + csvContent);
 });

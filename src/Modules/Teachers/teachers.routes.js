@@ -9,6 +9,7 @@ import {
   getTeacherSchema,
   updateTeacherSchema,
   deleteTeacherSchema,
+  getTeacherStatsSchema,
 } from "./teachers.validation.js";
 import subjectsRouter from "./subjects/subjects.routes.js";
 
@@ -30,6 +31,13 @@ router.get(
   teacherController.getMyStudents,
 );
 
+router.get(
+  "/export",
+  authentication(),
+  authorizeResource("teachers"),
+  teacherController.exportTeachersCsv,
+);
+
 router.post(
   "/create",
   authentication(),
@@ -44,6 +52,13 @@ router.get(
   authorizeResource("teachers"),
   validation(getTeacherSchema),
   teacherController.getTeacher,
+);
+router.get(
+  "/stats/:id",
+  authentication(),
+  authorizeResource("teachers"),
+  validation(getTeacherStatsSchema),
+  teacherController.getTeacherStats,
 );
 
 router.patch(

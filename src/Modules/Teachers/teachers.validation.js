@@ -63,6 +63,15 @@ export const getTeacherSchema = {
     id: generalFeilds.id.required(),
   }),
 };
+export const getTeacherStatsSchema = {
+  params: joi.object({
+    id: generalFeilds.id.required(),
+  }),
+  query: joi.object({
+    startMonth: generalFeilds.date.required(),
+    endMonth: generalFeilds.date.required(),
+  }),
+};
 
 export const deleteTeacherSchema = {
   params: joi.object({
