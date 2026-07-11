@@ -92,13 +92,10 @@ services:
         condition: service_started
     networks:
       - hedaya_network
-      - npm_network
 
 networks:
   hedaya_network:
     driver: bridge
-  npm_network:
-    external: true
 
 volumes:
   pgdata:
