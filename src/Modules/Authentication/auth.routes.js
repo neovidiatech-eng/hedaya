@@ -17,21 +17,23 @@ import {
 import { authentication } from "../../Middlewares/Authentication.js";
 import { authorize, authorizeResource } from "../../Middlewares/AuthorizationMiddleware.js";
 import { PERMISSIONS_V2 } from "../../Constants/permissions.constants.js";
+import { authRateLimiter, otpRateLimiter } from "../../Middlewares/RateLimiter.js";
 const router = Router();
 
-router.post("/sign-up", validation(registeritonSchema), auth.register);
+router.post("/sign-up", authRateLimiter, validation(registeritonSchema), auth.register);
 
-router.post("/sign-in", validation(loginSchema), auth.login); //done
+router.post("/sign-in", authRateLimiter, validation(loginSchema), auth.login); //done
 
 router.post("/refresh", cookieParser(), auth.refresh); //done
 
 router.post(
   "/google-signup",
+  authRateLimiter,
   validation(googleSignupSchema),
   auth.googleSignUp,
 );
 
-router.post("/google-login", validation(googleLoginSchema), auth.googlelogin); //done
+router.post("/google-login", authRateLimiter, validation(googleLoginSchema), auth.googlelogin); //done
 
 router.post("/logout", cookieParser(), auth.logout); //done
 
@@ -41,9 +43,10 @@ router.post(
   auth.verifyAccount,
 ); //done
 
-router.post("/resend-otp", validation(resendOtpSchema), auth.resendOtp);
+router.post("/resend-otp", otpRateLimiter, validation(resendOtpSchema), auth.resendOtp);
 router.post(
   "/forget-password",
+  otpRateLimiter,
   validation(forgetPasswordSchema),
   auth.forgetPassword,
 );

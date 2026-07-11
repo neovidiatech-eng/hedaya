@@ -7,6 +7,7 @@ import path from "node:path";
 import { globalErrorHandling } from "./Utils/Response.js";
 import { langMiddleware } from "./Middlewares/i18n.js";
 import { timezoneMiddleware } from "./Middlewares/Timezone.js";
+import { globalRateLimiter } from "./Middlewares/RateLimiter.js";
 import fs from "node:fs";
 import {
   notificationQueue,
@@ -58,6 +59,7 @@ const bootstrap = async () => {
   app.use(express.json());
   app.use(langMiddleware); // Detect language for all requests
   app.use(timezoneMiddleware); // Detect timezone for all requests
+  app.use(globalRateLimiter); // Global rate limiter (anti-DDoS / spam)
   await redisConnection();
 
   // Root Router
