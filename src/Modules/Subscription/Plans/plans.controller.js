@@ -68,7 +68,10 @@ export const createPlan = asyncHandler(async (req, res, next) => {
     features,
     sessionTime,
     currencyId,
-    isHidden
+    isHidden,
+    isGroup,
+    maxStudents,
+    planType,
   } = req.body;
   const existPlan = await db.findFirst({
     model: "Plans",
@@ -114,6 +117,9 @@ export const createPlan = asyncHandler(async (req, res, next) => {
       sessionTime: parseInt(sessionTime),
       currencyId,
       isHidden: isHidden || false,
+      isGroup: isGroup || false,
+      maxStudents: maxStudents || 1,
+      planType: planType || (isGroup ? "group" : "individual"),
     },
   });
   if (!plan) {
@@ -148,7 +154,10 @@ export const updatePlan = asyncHandler(async (req, res, next) => {
     features,
     sessionTime,
     currencyId,
-    isHidden
+    isHidden,
+    isGroup,
+    maxStudents,
+    planType,
   } = req.body;
 
   const plan = await db.findOne({
@@ -181,6 +190,9 @@ export const updatePlan = asyncHandler(async (req, res, next) => {
   if (sessionTime !== undefined) data.sessionTime = sessionTime;
   if (currencyId !== undefined) data.currencyId = currencyId;
   if (isHidden !== undefined) data.isHidden = isHidden;
+  if (isGroup !== undefined) data.isGroup = isGroup;
+  if (maxStudents !== undefined) data.maxStudents = maxStudents;
+  if (planType !== undefined) data.planType = planType;
   const updatedPlan = await db.updateOne({
     model: "Plans",
     where: { id },

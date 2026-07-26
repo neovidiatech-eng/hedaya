@@ -8,10 +8,14 @@ export const createSchedule = {
       studentId: generalFeilds.id
         .messages({
           "string.empty": "STUDENT_ID_REQUIRED",
-          "any.required": "STUDENT_ID_REQUIRED",
           "string.pattern.base": "STUDENT_ID_INVALID",
         })
-        .required(),
+        .optional(),
+      studentIds: Joi.array()
+        .items(generalFeilds.id)
+        .optional(),
+      isGroup: Joi.boolean().optional(),
+      maxStudents: Joi.number().integer().min(1).optional(),
       teacherId: generalFeilds.id
         .messages({
           "string.empty": "TEACHER_ID_REQUIRED",
@@ -73,7 +77,12 @@ export const createSchedule = {
 export const createRecurringSchedule = {
   body: Joi.object()
     .keys({
-      studentId: generalFeilds.id.required(),
+      studentId: generalFeilds.id.optional(),
+      studentIds: Joi.array()
+        .items(generalFeilds.id)
+        .optional(),
+      isGroup: Joi.boolean().optional(),
+      maxStudents: Joi.number().integer().min(1).optional(),
       teacherId: generalFeilds.id.required(),
       subject_id: generalFeilds.id.required(),
       title: generalFeilds.name.required(),

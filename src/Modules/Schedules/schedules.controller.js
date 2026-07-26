@@ -46,6 +46,17 @@ export const getAllSchedules = asyncHandler(async (req, res, next) => {
         },
       },
       {
+        groupStudents: {
+          some: {
+            student: {
+              user: {
+                name: { contains: search, mode: "insensitive" },
+              },
+            },
+          },
+        },
+      },
+      {
         teacher: {
           user: {
             name: { contains: search, mode: "insensitive" },
@@ -83,6 +94,23 @@ export const getAllSchedules = asyncHandler(async (req, res, next) => {
             },
           },
         },
+        groupStudents: {
+          include: {
+            student: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    phone: true,
+                    code_country: true,
+                  },
+                },
+              },
+            },
+          },
+        },
         teacher: {
           include: {
             user: {
@@ -113,6 +141,9 @@ export const getAllSchedules = asyncHandler(async (req, res, next) => {
 export const createSchedule = asyncHandler(async (req, res, next) => {
   const {
     studentId,
+    studentIds = [],
+    isGroup = false,
+    maxStudents = 1,
     teacherId,
     subject_id,
     title,
@@ -124,18 +155,40 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
     start_time,
   } = req.body;
 
-  /* check if student and teacher exist */
-  const [student, teacher, subject] = await Promise.all([
-    db.findOne({
+  const effectiveStudentIds = Array.from(
+    new Set([studentId, ...(Array.isArray(studentIds) ? studentIds : [])].filter(Boolean))
+  );
+
+  if (effectiveStudentIds.length === 0) {
+    return errorResponse({
+      req,
+      next,
+      status: 400,
+      message: "STUDENT_ID_REQUIRED",
+    });
+  }
+
+  if (isGroup && effectiveStudentIds.length > maxStudents) {
+    return errorResponse({
+      req,
+      next,
+      status: 400,
+      message: "EXCEEDS_MAX_STUDENTS",
+    });
+  }
+
+  /* check if students, teacher, and subject exist */
+  const [students, teacher, subject] = await Promise.all([
+    db.findMany({
       model: "student",
-      where: { id: studentId },
-      include: { plan: true },
+      where: { id: { in: effectiveStudentIds } },
+      include: { plan: true, user: true },
     }),
     checkExist({ model: "teacher", where: { id: teacherId }, next }),
     checkExist({ model: "subjects", where: { id: subject_id }, next }),
   ]);
 
-  if (!student) {
+  if (students.length !== effectiveStudentIds.length) {
     return errorResponse({
       req,
       next,
@@ -144,21 +197,40 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
     });
   }
 
+  // Session check for all students
+  const requiredSessions = 1;
+  for (const st of students) {
+    if (st.sessions_remaining < requiredSessions) {
+      return errorResponse({
+        req,
+        next,
+        status: 400,
+        message: "INSUFFICIENT_SESSIONS",
+        messageParams: { remaining: st.sessions_remaining, student: st.user?.name },
+      });
+    }
+  }
+
+  const primaryStudent = students[0];
   const startTime = normalizeDate(start_time, req.timezone);
   const endTime = getEndTime({
     startTime,
-    duration: student.plan?.sessionTime,
+    duration: primaryStudent?.plan?.sessionTime || 60,
     tz: req.timezone,
   });
 
-  /* check if student and teacher are available at the same time */
+  /* check if any effective student or teacher are available at the same time */
   const [studentSchedule, teacherSchedule] = await Promise.all([
     db.findFirst({
       model: "schedule",
       where: {
-        studentId,
+        status: { not: "cancelled" },
         start_time: { lt: endTime },
         end_time: { gt: startTime },
+        OR: [
+          { studentId: { in: effectiveStudentIds } },
+          { groupStudents: { some: { studentId: { in: effectiveStudentIds } } } },
+        ],
       },
     }),
 
@@ -193,25 +265,13 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
     });
   }
 
-  // Session check
-  const requiredSessions = 1;
-  if (student.sessions_remaining < requiredSessions) {
-    return errorResponse({
-      req,
-      next,
-      status: 400,
-      message: "INSUFFICIENT_SESSIONS",
-      messageParams: { remaining: student.sessions_remaining },
-    });
-  }
-
-  // Atomically create the schedule and deduct the session
+  // Atomically create the schedule and deduct the session for all students
   let newSchedule;
   await db.transaction(async (tx) => {
     newSchedule = await tx.create({
       model: "schedule",
       data: {
-        studentId,
+        studentId: isGroup ? null : effectiveStudentIds[0],
         teacherId,
         title,
         description,
@@ -220,14 +280,26 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
         subjectId: subject_id,
         start_time: startTime,
         end_time: endTime,
+        isGroup,
+        maxStudents: isGroup ? maxStudents : 1,
       },
     });
 
-    await tx.updateOne({
-      model: "student",
-      where: { id: studentId },
-      data: { sessions_remaining: { decrement: requiredSessions } },
-    });
+    for (const sId of effectiveStudentIds) {
+      await tx.create({
+        model: "GroupScheduleStudent",
+        data: {
+          scheduleId: newSchedule.id,
+          studentId: sId,
+        },
+      });
+
+      await tx.updateOne({
+        model: "student",
+        where: { id: sId },
+        data: { sessions_remaining: { decrement: requiredSessions } },
+      });
+    }
   });
 
   let reminderTime;
@@ -248,29 +320,46 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
 
   const now = new Date();
   if (reminderTime > now) {
-    addNotificationJob({
-      scheduleId: newSchedule.id,
-      studentId,
-      type: notificationJobType,
-      sendAt: reminderTime,
-    });
+    for (const sId of effectiveStudentIds) {
+      addNotificationJob({
+        scheduleId: newSchedule.id,
+        studentId: sId,
+        type: notificationJobType,
+        sendAt: reminderTime,
+      });
+    }
   }
 
-  const [studentInfo, teacherInfo] = await Promise.all([
-    db.findOne({ model: "student", where: { id: studentId }, include: { user: true } }),
-    db.findOne({ model: "teacher", where: { id: teacherId }, include: { user: true } }),
-  ]);
+  const teacherInfo = await db.findOne({
+    model: "teacher",
+    where: { id: teacherId },
+    include: { user: true },
+  });
+
   await createAdminNotification({
     title: "تم جدولة الجلسة",
-    message: `تم جدولة جلسة جديدة "${title}" للطالب: ${studentInfo?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
+    message: isGroup
+      ? `تم جدولة جلسة جماعية جديدة "${title}" لعدد ${effectiveStudentIds.length} طلاب مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`
+      : `تم جدولة جلسة جديدة "${title}" للطالب: ${primaryStudent?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
     type: "session_created",
+  });
+
+  const fullSchedule = await db.findOne({
+    model: "schedule",
+    where: { id: newSchedule.id },
+    include: {
+      student: { include: { user: true } },
+      teacher: { include: { user: true } },
+      subject: true,
+      groupStudents: { include: { student: { include: { user: true } } } },
+    },
   });
 
   return successResponse({
     res,
     req,
     data: {
-      schedule: formatSchedules(newSchedule, req.timezone),
+      schedule: formatSchedules(fullSchedule, req.timezone),
     },
     status: 201,
     message: "CREATE_SUCCESS",
@@ -283,6 +372,9 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
 export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
   const {
     studentId,
+    studentIds = [],
+    isGroup = false,
+    maxStudents = 1,
     teacherId,
     subject_id,
     title,
@@ -299,18 +391,40 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
   const skipedSchedules = [];
   const perSessionUnits = 1;
 
-  /* check exist student, teacher, subject */
-  const [student, teacher, subject] = await Promise.all([
-    db.findOne({
+  const effectiveStudentIds = Array.from(
+    new Set([studentId, ...(Array.isArray(studentIds) ? studentIds : [])].filter(Boolean))
+  );
+
+  if (effectiveStudentIds.length === 0) {
+    return errorResponse({
+      req,
+      next,
+      status: 400,
+      message: "STUDENT_ID_REQUIRED",
+    });
+  }
+
+  if (isGroup && effectiveStudentIds.length > maxStudents) {
+    return errorResponse({
+      req,
+      next,
+      status: 400,
+      message: "EXCEEDS_MAX_STUDENTS",
+    });
+  }
+
+  /* check exist students, teacher, subject */
+  const [students, teacher, subject] = await Promise.all([
+    db.findMany({
       model: "student",
-      where: { id: studentId },
-      include: { plan: true },
+      where: { id: { in: effectiveStudentIds } },
+      include: { plan: true, user: true },
     }),
     checkExist({ model: "teacher", where: { id: teacherId }, next }),
     checkExist({ model: "subjects", where: { id: subject_id }, next }),
   ]);
 
-  if (!student) {
+  if (students.length !== effectiveStudentIds.length) {
     return errorResponse({
       req,
       next,
@@ -319,16 +433,19 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
     });
   }
 
-  // If count is not provided but student has sessions, we could use sessions_remaining as a default count if endDate is missing
-  const effectiveCount = count || (endDate ? null : student.sessions_remaining);
+  const primaryStudent = students[0];
+  const minSessionsRemaining = Math.min(...students.map((s) => s.sessions_remaining));
+
+  // If count is not provided but student has sessions, we could use minSessionsRemaining as a default count if endDate is missing
+  const effectiveCount = count || (endDate ? null : minSessionsRemaining);
 
   let dates = getDatesBetweenUTC(startDate, endDate, days, effectiveCount);
 
-  // Session check for recurring: Cap the dates to the student's remaining sessions
-  if (dates.length > student.sessions_remaining) {
+  // Session check for recurring: Cap the dates to the minimum remaining sessions among all students
+  if (dates.length > minSessionsRemaining) {
     dates = dates.slice(
       0,
-      Math.floor(student.sessions_remaining / perSessionUnits),
+      Math.floor(minSessionsRemaining / perSessionUnits),
     );
   }
 
@@ -339,7 +456,7 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
       status: 400,
       message: "INSUFFICIENT_SESSIONS_OR_INVALID_RANGE",
       messageParams: {
-        remaining: student.sessions_remaining,
+        remaining: minSessionsRemaining,
       },
     });
   }
@@ -357,7 +474,7 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
   const lastDate = allDatesStart[allDatesStart.length - 1];
   const windowEnd = getEndTime({
     startTime: lastDate,
-    duration: student.plan?.sessionTime,
+    duration: primaryStudent.plan?.sessionTime,
     tz: req.timezone,
   });
 
@@ -376,10 +493,13 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
     db.findMany({
       model: "schedule",
       where: {
-        studentId,
         status: { not: "cancelled" },
         start_time: { lt: windowEnd },
         end_time: { gt: windowStart },
+        OR: [
+          { studentId: { in: effectiveStudentIds } },
+          { groupStudents: { some: { studentId: { in: effectiveStudentIds } } } },
+        ],
       },
       select: { id: true, start_time: true, end_time: true, title: true },
     }),
@@ -390,7 +510,7 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
 
     const end_time = getEndTime({
       startTime: start_time,
-      duration: student.plan?.sessionTime,
+      duration: primaryStudent.plan?.sessionTime,
       tz: req.timezone,
     });
 
@@ -420,7 +540,7 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
     }
 
     schedulesToCreate.push({
-      studentId,
+      studentId: isGroup ? null : effectiveStudentIds[0],
       teacherId,
       title,
       description,
@@ -430,6 +550,8 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
       end_time,
       subjectId: subject_id,
       is_recurring: true,
+      isGroup,
+      maxStudents: isGroup ? maxStudents : 1,
       day_of_week: dayjs.tz(date, req.timezone).format("dddd"),
       parent_recurring_id: parentRecurringId,
     });
@@ -449,6 +571,17 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
           model: "schedule",
           data: scheduleData,
         });
+
+        for (const sId of effectiveStudentIds) {
+          await tx.create({
+            model: "GroupScheduleStudent",
+            data: {
+              scheduleId: schedule.id,
+              studentId: sId,
+            },
+          });
+        }
+
         createdSchedules.push({
           id: schedule.id,
           date: scheduleData.start_time.toISOString().split("T")[0],
@@ -456,15 +589,17 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
         });
       }
 
-      await tx.updateOne({
-        model: "student",
-        where: { id: studentId },
-        data: {
-          sessions_remaining: {
-            decrement: createdSchedules.length * perSessionUnits,
+      for (const sId of effectiveStudentIds) {
+        await tx.updateOne({
+          model: "student",
+          where: { id: sId },
+          data: {
+            sessions_remaining: {
+              decrement: createdSchedules.length * perSessionUnits,
+            },
           },
-        },
-      });
+        });
+      }
     });
 
     // Queue notification jobs after successful transaction
@@ -487,24 +622,25 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
         notificationJobType = "before 60 minutes";
       }
       if (reminderTime > now) {
-        addNotificationJob({
-          scheduleId: createdSchedules[index]?.id,
-          studentId,
-          type: notificationJobType,
-          sendAt: reminderTime,
-        });
+        for (const sId of effectiveStudentIds) {
+          addNotificationJob({
+            scheduleId: createdSchedules[index]?.id,
+            studentId: sId,
+            type: notificationJobType,
+            sendAt: reminderTime,
+          });
+        }
       }
     }
   }
 
   if (createdSchedules.length > 0) {
-    const [studentInfo, teacherInfo] = await Promise.all([
-      db.findOne({ model: "student", where: { id: studentId }, include: { user: true } }),
-      db.findOne({ model: "teacher", where: { id: teacherId }, include: { user: true } }),
-    ]);
+    const teacherInfo = await db.findOne({ model: "teacher", where: { id: teacherId }, include: { user: true } });
     await createAdminNotification({
       title: "تم جدولة الجلسات المتكررة",
-      message: `تم جدولة ${createdSchedules.length} جلسات متكررة للطالب: ${studentInfo?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
+      message: isGroup
+        ? `تم جدولة ${createdSchedules.length} جلسات متكررة جماعية لعدد ${effectiveStudentIds.length} طلاب مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`
+        : `تم جدولة ${createdSchedules.length} جلسات متكررة للطالب: ${primaryStudent?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
       type: "session_created",
     });
   }
@@ -553,18 +689,20 @@ export const getUserSchedules = asyncHandler(async (req, res, next) => {
         message: "STUDENT_NOT_FOUND",
       });
     }
-    where.studentId = student.id;
+    where.OR = [
+      { studentId: student.id },
+      { groupStudents: { some: { studentId: student.id } } },
+    ];
   }
 
   if (search) {
     if (where.teacherId) {
       // If teacher is viewing, search by student name
-      where.student = {
-        user: {
-          name: { contains: search, mode: "insensitive" },
-        },
-      };
-    } else if (where.studentId) {
+      where.OR = [
+        { student: { user: { name: { contains: search, mode: "insensitive" } } } },
+        { groupStudents: { some: { student: { user: { name: { contains: search, mode: "insensitive" } } } } } }
+      ];
+    } else if (user.role?.name?.toLowerCase() === "student") {
       // If student is viewing, search by teacher name
       where.teacher = {
         user: {
@@ -578,6 +716,11 @@ export const getUserSchedules = asyncHandler(async (req, res, next) => {
           student: {
             user: { name: { contains: search, mode: "insensitive" } },
           },
+        },
+        {
+          groupStudents: {
+            some: { student: { user: { name: { contains: search, mode: "insensitive" } } } }
+          }
         },
         {
           teacher: {
@@ -601,6 +744,23 @@ export const getUserSchedules = asyncHandler(async (req, res, next) => {
               email: true,
               phone: true,
               code_country: true,
+            },
+          },
+        },
+      },
+      groupStudents: {
+        include: {
+          student: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                  phone: true,
+                  code_country: true,
+                },
+              },
             },
           },
         },
@@ -637,12 +797,20 @@ export const getUserSchedules = asyncHandler(async (req, res, next) => {
 /* ------------------------------------------------------------------ */
 /*                  Delete a single session & its job                   */
 /* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/*                  Delete a single session & its job                   */
+/* ------------------------------------------------------------------ */
 export const deleteSchedule = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
 
-  const schedule = await db.findFirst({
+  const schedule = await db.findOne({
     model: "schedule",
     where: { id },
+    include: {
+      groupStudents: { include: { student: { include: { user: true } } } },
+      student: { include: { user: true } },
+      teacher: { include: { user: true } },
+    },
   });
 
   if (!schedule) {
@@ -657,16 +825,22 @@ export const deleteSchedule = asyncHandler(async (req, res, next) => {
   // Removal job from BullMQ
   await removeNotificationJob(id);
 
+  const effectiveStudentIds = schedule.isGroup
+    ? (schedule.groupStudents || []).map((g) => g.studentId)
+    : (schedule.studentId ? [schedule.studentId] : []);
+
   // 🛡️ Use transaction to ensure refund and deletion happen together
   await db.transaction(async (tx) => {
     // Refund sessions if it wasn't already cancelled
     if (schedule.status !== "cancelled") {
       const refundSessions = 1;
-      await tx.updateOne({
-        model: "student",
-        where: { id: schedule.studentId },
-        data: { sessions_remaining: { increment: refundSessions } },
-      });
+      for (const sId of effectiveStudentIds) {
+        await tx.updateOne({
+          model: "student",
+          where: { id: sId },
+          data: { sessions_remaining: { increment: refundSessions } },
+        });
+      }
     }
 
     // Delete from DB
@@ -676,13 +850,13 @@ export const deleteSchedule = asyncHandler(async (req, res, next) => {
     });
   });
 
-  const [studentInfo, teacherInfo] = await Promise.all([
-    db.findOne({ model: "student", where: { id: schedule.studentId }, include: { user: true } }),
-    db.findOne({ model: "teacher", where: { id: schedule.teacherId }, include: { user: true } }),
-  ]);
+  const studentName = schedule.isGroup
+    ? `عدد ${effectiveStudentIds.length} طلاب`
+    : (schedule.student?.user?.name || "Student");
+
   await createAdminNotification({
     title: "تم إلغاء الجلسة",
-    message: `تم إلغاء الجلسة "${schedule.title}" للطالب: ${studentInfo?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
+    message: `تم إلغاء الجلسة "${schedule.title}" للطالب: ${studentName} مع المدرس: ${schedule.teacher?.user?.name || "Teacher"}.`,
     type: "session_cancelled",
   });
 
@@ -703,7 +877,11 @@ export const deleteRecurringGroup = asyncHandler(async (req, res, next) => {
   const schedules = await db.findMany({
     model: "schedule",
     where: { parent_recurring_id },
-    select: { id: true },
+    include: {
+      groupStudents: true,
+      teacher: { include: { user: true } },
+      student: { include: { user: true } },
+    },
   });
 
   const sessionsCount = schedules.length;
@@ -720,29 +898,27 @@ export const deleteRecurringGroup = asyncHandler(async (req, res, next) => {
   // Remove all jobs
   await Promise.all(schedules.map((s) => removeNotificationJob(s.id)));
 
-  // Refund sessions for sessions that weren't already cancelled
-  const sessionsToRefund = await db.findMany({
-    model: "schedule",
-    where: { parent_recurring_id, status: { not: "cancelled" } },
-    select: { id: true },
-  });
+  // Calculate refund per student for non-cancelled sessions
+  const studentRefundCounts = {};
+  for (const s of schedules) {
+    if (s.status !== "cancelled") {
+      const studentIds = s.isGroup
+        ? (s.groupStudents || []).map((g) => g.studentId)
+        : (s.studentId ? [s.studentId] : []);
+      for (const sId of studentIds) {
+        studentRefundCounts[sId] = (studentRefundCounts[sId] || 0) + 1;
+      }
+    }
+  }
 
   // 🛡️ Use transaction to ensure refund and mass deletion happen together
   await db.transaction(async (tx) => {
-    if (sessionsToRefund.length > 0) {
-      const totalRefund = sessionsToRefund.length;
-      const firstSchedule = await tx.findFirst({
-        model: "schedule",
-        where: { parent_recurring_id },
+    for (const [sId, count] of Object.entries(studentRefundCounts)) {
+      await tx.updateOne({
+        model: "student",
+        where: { id: sId },
+        data: { sessions_remaining: { increment: count } },
       });
-
-      if (firstSchedule) {
-        await tx.updateOne({
-          model: "student",
-          where: { id: firstSchedule.studentId },
-          data: { sessions_remaining: { increment: totalRefund } },
-        });
-      }
     }
 
     // Delete all sessions
@@ -752,19 +928,12 @@ export const deleteRecurringGroup = asyncHandler(async (req, res, next) => {
     });
   });
 
-  const firstSchedule = await db.findFirst({
-    model: "schedule",
-    where: { parent_recurring_id },
-    include: {
-      student: { include: { user: true } },
-      teacher: { include: { user: true } },
-    },
-  });
+  const firstSchedule = schedules[0];
 
   if (firstSchedule) {
     await createAdminNotification({
       title: "تم إلغاء الجلسات المتكررة",
-      message: `تم إلغاء جميع الجلسات المتكررة تحت المجموعة "${parent_recurring_id}" للطالب: ${firstSchedule.student?.user?.name || "Student"} مع المدرس: ${firstSchedule.teacher?.user?.name || "Teacher"}.`,
+      message: `تم إلغاء جميع الجلسات المتكررة تحت المجموعة "${parent_recurring_id}" مع المدرس: ${firstSchedule.teacher?.user?.name || "Teacher"}.`,
       type: "session_cancelled",
     });
   }
@@ -788,7 +957,11 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
   const schedule = await db.findOne({
     model: "schedule",
     where: { id },
-    include: { student: { include: { plan: true } } },
+    include: {
+      student: { include: { plan: true, user: true } },
+      teacher: { include: { user: true } },
+      groupStudents: { include: { student: { include: { plan: true, user: true } } } },
+    },
   });
 
   if (!schedule) {
@@ -799,6 +972,12 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
       message: "SESSION_NOT_FOUND",
     });
   }
+
+  const effectiveStudentIds = schedule.isGroup
+    ? (schedule.groupStudents || []).map((g) => g.studentId)
+    : (schedule.studentId ? [schedule.studentId] : []);
+
+  const primaryStudent = schedule.student || schedule.groupStudents?.[0]?.student;
 
   let startTime = schedule.start_time;
   let endTime = schedule.end_time;
@@ -814,7 +993,7 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
       : startTime;
     endTime = getEndTime({
       startTime,
-      duration: schedule.student.plan?.sessionTime,
+      duration: primaryStudent?.plan?.sessionTime || 60,
       tz: req.timezone,
     });
 
@@ -828,19 +1007,27 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
       where: {
         teacherId: schedule.teacherId,
         id: { not: id },
+        status: { not: "cancelled" },
         start_time: { lt: endTime },
         end_time: { gt: startTime },
       },
     });
-    const student_conflict = await db.findFirst({
-      model: "schedule",
-      where: {
-        studentId: schedule.studentId,
-        id: { not: id },
-        start_time: { lt: endTime },
-        end_time: { gt: startTime },
-      },
-    });
+
+    const student_conflict = effectiveStudentIds.length > 0
+      ? await db.findFirst({
+          model: "schedule",
+          where: {
+            id: { not: id },
+            status: { not: "cancelled" },
+            start_time: { lt: endTime },
+            end_time: { gt: startTime },
+            OR: [
+              { studentId: { in: effectiveStudentIds } },
+              { groupStudents: { some: { studentId: { in: effectiveStudentIds } } } },
+            ],
+          },
+        })
+      : null;
 
     if (teacher_conflict || student_conflict) {
       return errorResponse({
@@ -856,32 +1043,36 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
   if (otherData.status && otherData.status !== schedule.status) {
     const sessionUnits = 1;
     if (otherData.status === "cancelled") {
-      // Refund
-      await db.updateOne({
-        model: "student",
-        where: { id: schedule.studentId },
-        data: { sessions_remaining: { increment: sessionUnits } },
-      });
-    } else if (schedule.status === "cancelled") {
-      // Restoring: Deduct
-      if (schedule.student.sessions_remaining < sessionUnits) {
-        return errorResponse({
-          req,
-          next,
-          status: 400,
-          message: "INSUFFICIENT_SESSIONS_RESTORE",
+      // Refund all students
+      for (const sId of effectiveStudentIds) {
+        await db.updateOne({
+          model: "student",
+          where: { id: sId },
+          data: { sessions_remaining: { increment: sessionUnits } },
         });
       }
-      await db.updateOne({
-        model: "student",
-        where: { id: schedule.studentId },
-        data: { sessions_remaining: { decrement: sessionUnits } },
-      });
+    } else if (schedule.status === "cancelled") {
+      // Restoring: Check sessions for all students
+      for (const sId of effectiveStudentIds) {
+        const st = await db.findOne({ model: "student", where: { id: sId } });
+        if (!st || st.sessions_remaining < sessionUnits) {
+          return errorResponse({
+            req,
+            next,
+            status: 400,
+            message: "INSUFFICIENT_SESSIONS_RESTORE",
+          });
+        }
+      }
+      for (const sId of effectiveStudentIds) {
+        await db.updateOne({
+          model: "student",
+          where: { id: sId },
+          data: { sessions_remaining: { decrement: sessionUnits } },
+        });
+      }
     }
   }
-
-  // Adjust sessions if type changed (no longer affects session units but keeping logic structure)
-  // Since 1 session = 1 unit regardless of type, no unit adjustment needed on type change.
 
   const updatedSchedule = await db.updateOne({
     model: "schedule",
@@ -913,23 +1104,25 @@ export const updateSchedule = asyncHandler(async (req, res, next) => {
 
       const now = new Date();
       if (reminderTime > now) {
-        addNotificationJob({
-          scheduleId: id,
-          studentId: schedule.studentId,
-          type: notificationJobType,
-          sendAt: reminderTime,
-        });
+        for (const sId of effectiveStudentIds) {
+          addNotificationJob({
+            scheduleId: id,
+            studentId: sId,
+            type: notificationJobType,
+            sendAt: reminderTime,
+          });
+        }
       }
     }
   }
 
-  const [studentInfo, teacherInfo] = await Promise.all([
-    db.findOne({ model: "student", where: { id: schedule.studentId }, include: { user: true } }),
-    db.findOne({ model: "teacher", where: { id: schedule.teacherId }, include: { user: true } }),
-  ]);
+  const studentName = schedule.isGroup
+    ? `عدد ${effectiveStudentIds.length} طلاب`
+    : (primaryStudent?.user?.name || "Student");
+
   await createAdminNotification({
     title: "تم تعديل الجلسة",
-    message: `تم تعديل الجلسة "${updatedSchedule.title}" للطالب: ${studentInfo?.user?.name || "Student"} مع المدرس: ${teacherInfo?.user?.name || "Teacher"}.`,
+    message: `تم تعديل الجلسة "${updatedSchedule.title}" للطالب: ${studentName} مع المدرس: ${schedule.teacher?.user?.name || "Teacher"}.`,
     type: "session_updated",
   });
 
@@ -1047,23 +1240,44 @@ export const joinSession = asyncHandler(async (req, res, next) => {
   }
 
   // Notify other party
-  const targetUserId =
-    role === "student" ? session.teacherId : session.studentId;
-  const targetUser = await db.findOne({
-    model: role === "student" ? "teacher" : "student",
-    where: { id: targetUserId },
-    include: { user: true },
-  });
-
-  if (targetUser?.user?.id) {
-    await createNotification({
-      userId: targetUser.user.id,
-      title: req.t("NOTIFICATION_SESSION_JOINED_TITLE"),
-      message: req.t("NOTIFICATION_SESSION_JOINED_MSG", {
-        role: role === "student" ? req.t("STUDENT") : req.t("TEACHER"),
-      }),
-      type: "session_joined",
+  if (role === "student") {
+    const teacherUser = await db.findOne({
+      model: "teacher",
+      where: { id: session.teacherId },
+      include: { user: true },
     });
+
+    if (teacherUser?.user?.id) {
+      await createNotification({
+        userId: teacherUser.user.id,
+        title: req.t("NOTIFICATION_SESSION_JOINED_TITLE"),
+        message: req.t("NOTIFICATION_SESSION_JOINED_MSG", {
+          role: req.t("STUDENT"),
+        }),
+        type: "session_joined",
+      });
+    }
+  } else if (role === "teacher") {
+    const groupStudents = await db.findMany({
+      model: "GroupScheduleStudent",
+      where: { scheduleId: id },
+      include: { student: { include: { user: true } } },
+    });
+
+    const studentUserIds = session.studentId
+      ? [(await db.findOne({ model: "student", where: { id: session.studentId }, include: { user: true } }))?.user?.id].filter(Boolean)
+      : groupStudents.map((g) => g.student?.user?.id).filter(Boolean);
+
+    for (const uId of studentUserIds) {
+      await createNotification({
+        userId: uId,
+        title: req.t("NOTIFICATION_SESSION_JOINED_TITLE"),
+        message: req.t("NOTIFICATION_SESSION_JOINED_MSG", {
+          role: req.t("TEACHER"),
+        }),
+        type: "session_joined",
+      });
+    }
   }
 
   return successResponse({ res, req, status: 200, message: "JOINED_SUCCESS" });
@@ -1135,6 +1349,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
     include: {
       student: { include: { user: true } },
       teacher: { include: { user: true } },
+      groupStudents: { include: { student: { include: { user: true } } } },
       scheduleLogs: true,
     },
   });
@@ -1171,8 +1386,12 @@ export const submitReview = asyncHandler(async (req, res, next) => {
     });
   }
 
-  const isStudent = user.id === session.student.user.id;
-  const isTeacher = user.id === session.teacher.user.id;
+  const studentUsers = session.student?.user
+    ? [session.student.user]
+    : (session.groupStudents || []).map((g) => g.student?.user).filter(Boolean);
+
+  const isStudent = studentUsers.some((u) => u.id === user.id);
+  const isTeacher = user.id === session.teacher?.user?.id;
 
   if (!isStudent && !isTeacher) {
     return errorResponse({
@@ -1241,17 +1460,17 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 
   const revieweeId = isStudent
     ? session.teacher.user.id
-    : session.student.user.id;
+    : (studentUsers[0]?.id || user.id);
 
   const role = isStudent ? "student" : "teacher";
+
+  const effectiveStudentIds = session.isGroup
+    ? (session.groupStudents || []).map((g) => g.studentId)
+    : (session.studentId ? [session.studentId] : []);
 
   let review;
 
   await db.transaction(async (tx) => {
-    /*
-      Settlement should happen once only.
-      Do not depend on req.body.teacherAttended or req.body.studentAttended.
-    */
     if (log.isStudentAttended !== studentActuallyAttended) {
       await tx.updateOne({
         model: "scheduleLog",
@@ -1262,14 +1481,16 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 
     if (session.status === "ongoing") {
       if (!teacherActuallyAttended) {
-        // Teacher absent => refund student
-        await tx.updateOne({
-          model: "student",
-          where: { id: session.studentId },
-          data: {
-            sessions_remaining: { increment: 1 },
-          },
-        });
+        // Teacher absent => refund all students
+        for (const sId of effectiveStudentIds) {
+          await tx.updateOne({
+            model: "student",
+            where: { id: sId },
+            data: {
+              sessions_remaining: { increment: 1 },
+            },
+          });
+        }
 
         await tx.updateOne({
           model: "schedule",
@@ -1336,13 +1557,15 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 
         // Only count attended session if student really attended
         if (studentActuallyAttended) {
-          await tx.updateOne({
-            model: "student",
-            where: { id: session.studentId },
-            data: {
-              sessions_attended: { increment: 1 },
-            },
-          });
+          for (const sId of effectiveStudentIds) {
+            await tx.updateOne({
+              model: "student",
+              where: { id: sId },
+              data: {
+                sessions_attended: { increment: 1 },
+              },
+            });
+          }
         }
       }
     }
@@ -1390,6 +1613,7 @@ async function finalizeSession(scheduleId, t) {
       scheduleLogs: true,
       student: { include: { user: true } },
       teacher: { include: { user: true } },
+      groupStudents: { include: { student: { include: { user: true } } } },
     },
   });
 
@@ -1412,18 +1636,28 @@ async function finalizeSession(scheduleId, t) {
 
   // Notify if missed
   if (newStatus === "missed") {
-    await createNotification({
-      userId: session.student.user_id,
-      title: t ? t("NOTIFICATION_SESSION_MISSED_TITLE") : "Session Missed",
-      message: t
-        ? t("NOTIFICATION_SESSION_MISSED_MSG", { title: session.title })
-        : `The session ${session.title} was marked as missed.`,
-      type: "session_missed",
-    });
+    const studentUserIds = session.student?.user_id
+      ? [session.student.user_id]
+      : (session.groupStudents || []).map((g) => g.student?.user_id).filter(Boolean);
+
+    for (const uId of studentUserIds) {
+      await createNotification({
+        userId: uId,
+        title: t ? t("NOTIFICATION_SESSION_MISSED_TITLE") : "Session Missed",
+        message: t
+          ? t("NOTIFICATION_SESSION_MISSED_MSG", { title: session.title })
+          : `The session ${session.title} was marked as missed.`,
+        type: "session_missed",
+      });
+    }
+
+    const studentName = session.isGroup
+      ? `عدد ${session.groupStudents?.length || 0} طلاب`
+      : (session.student?.user?.name || "Student");
 
     await createAdminNotification({
       title: "تم تفويت الجلسة",
-      message: `تم تفويت الجلسة "${session.title}" بين الطالب: ${session.student.user?.name || "Student"} والمدرس: ${session.teacher.user?.name || "Teacher"}.`,
+      message: `تم تفويت الجلسة "${session.title}" بين الطالب: ${studentName} والمدرس: ${session.teacher?.user?.name || "Teacher"}.`,
       type: "session_missed",
     });
   }

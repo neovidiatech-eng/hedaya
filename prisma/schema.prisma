@@ -123,6 +123,9 @@ model Plans {
   bestSeller           Boolean                 @default(false)
   sessionsCount        Float                   @default(0)
   sessionTime          Float                   @default(0)
+  isGroup              Boolean                 @default(false)
+  maxStudents          Int                     @default(1)
+  planType             String                  @default("individual")
   currency             currency?               @relation(fields: [currencyId], references: [id], onDelete: SetNull)
   subscriptions        Subscription[]
   students             student[]
@@ -212,37 +215,38 @@ model teacher_subject {
 }
 
 model student {
-  id                 String          @id @default(uuid())
-  user_id            String          @unique
+  id                 String                 @id @default(uuid())
+  user_id            String                 @unique
   birth_date         DateTime
   gender             String
-  active             Boolean         @default(false)
+  active             Boolean                @default(false)
   planId             String?
   country            String
-  status             String          @default("pending")
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
-  sessions           Float           @default(0)
-  sessions_attended  Float           @default(0)
-  sessions_remaining Float           @default(0)
-  avgRating          Float           @default(0)
-  totalReviews       Int             @default(0)
+  status             String                 @default("pending")
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  sessions           Float                  @default(0)
+  sessions_attended  Float                  @default(0)
+  sessions_remaining Float                  @default(0)
+  avgRating          Float                  @default(0)
+  totalReviews       Int                    @default(0)
   exams              exam[]
   homeworks          homework[]
   schedules          schedule[]
-  plan               Plans?          @relation(fields: [planId], references: [id], onDelete: SetNull)
-  user               user            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  groupStudents      GroupScheduleStudent[]
+  plan               Plans?                 @relation(fields: [planId], references: [id], onDelete: SetNull)
+  user               user                   @relation(fields: [user_id], references: [id], onDelete: Cascade)
   conversations      Conversation[]
-  parents            ParentStudent[] @relation("StudentParentRelation")
+  parents            ParentStudent[]        @relation("StudentParentRelation")
 }
 
 model schedule {
-  id                  String            @id @default(uuid())
+  id                  String                 @id @default(uuid())
   teacherId           String
-  studentId           String
-  status              String            @default("scheduled")
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  studentId           String?
+  status              String                 @default("scheduled")
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
   notes               String?
   description         String?
   link                String
@@ -250,18 +254,23 @@ model schedule {
   end_time            DateTime
   start_time          DateTime
   day_of_week         String?
-  is_recurring        Boolean           @default(false)
+  is_recurring        Boolean                @default(false)
   parent_recurring_id String?
-  subjectId           String            @default("null")
-  rescheduledFromId   String?           @unique
-  rescheduledToId     String?           @unique
+  subjectId           String                 @default("null")
+  rescheduledFromId   String?                @unique
+  rescheduledToId     String?                @unique
+
+  isGroup             Boolean                @default(false)
+  maxStudents         Int                    @default(1)
+
   reviews             Review[]
   scheduleLogs        ScheduleLog?
-  rescheduledTo       schedule?         @relation("RescheduleHistory", fields: [rescheduledToId], references: [id])
-  rescheduledFrom     schedule?         @relation("RescheduleHistory")
-  student             student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  subject             subjects          @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  teacher             teacher           @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  rescheduledTo       schedule?              @relation("RescheduleHistory", fields: [rescheduledToId], references: [id])
+  rescheduledFrom     schedule?              @relation("RescheduleHistory")
+  student             student?               @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  subject             subjects               @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teacher             teacher                @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  groupStudents       GroupScheduleStudent[]
   requests            session_request[]
 
   @@index([teacherId])
@@ -269,6 +278,20 @@ model schedule {
   @@index([start_time])
   @@index([end_time])
   @@index([status])
+}
+
+model GroupScheduleStudent {
+  id         String   @id @default(uuid())
+  scheduleId String
+  studentId  String
+  createdAt  DateTime @default(now())
+
+  schedule   schedule @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  student    student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([scheduleId, studentId])
+  @@index([scheduleId])
+  @@index([studentId])
 }
 
 model session_request {
