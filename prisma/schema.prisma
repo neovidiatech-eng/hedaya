@@ -261,7 +261,7 @@ model schedule {
   rescheduledToId     String?                @unique
 
   isGroup             Boolean                @default(false)
-  maxStudents         Int                    @default(1)
+  maxStudents         String                 @default("1")
 
   reviews             Review[]
   scheduleLogs        ScheduleLog?

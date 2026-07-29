@@ -168,13 +168,23 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
     });
   }
 
-  if (isGroup && effectiveStudentIds.length > maxStudents) {
-    return errorResponse({
-      req,
-      next,
-      status: 400,
-      message: "EXCEEDS_MAX_STUDENTS",
-    });
+  const computedIsGroup = effectiveStudentIds.length > 1 ? true : Boolean(isGroup);
+
+  let normalizedMaxStudents =
+    maxStudents === "0" || maxStudents === 0 || maxStudents === "unlimited"
+      ? "unlimited"
+      : String(maxStudents || 1);
+
+  if (computedIsGroup && normalizedMaxStudents !== "unlimited") {
+    const max = parseInt(normalizedMaxStudents, 10);
+    if (!isNaN(max) && effectiveStudentIds.length > max) {
+      return errorResponse({
+        req,
+        next,
+        status: 400,
+        message: "EXCEEDED_MAX_STUDENTS",
+      });
+    }
   }
 
   /* check if students, teacher, and subject exist */
@@ -271,7 +281,7 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
     newSchedule = await tx.create({
       model: "schedule",
       data: {
-        studentId: isGroup ? null : effectiveStudentIds[0],
+        studentId: computedIsGroup ? null : (studentId || effectiveStudentIds[0]),
         teacherId,
         title,
         description,
@@ -280,19 +290,21 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
         subjectId: subject_id,
         start_time: startTime,
         end_time: endTime,
-        isGroup,
-        maxStudents: isGroup ? maxStudents : 1,
+        isGroup: computedIsGroup,
+        maxStudents: computedIsGroup ? normalizedMaxStudents : "1",
       },
     });
 
     for (const sId of effectiveStudentIds) {
-      await tx.create({
-        model: "GroupScheduleStudent",
-        data: {
-          scheduleId: newSchedule.id,
-          studentId: sId,
-        },
-      });
+      if (computedIsGroup) {
+        await tx.create({
+          model: "GroupScheduleStudent",
+          data: {
+            scheduleId: newSchedule.id,
+            studentId: sId,
+          },
+        });
+      }
 
       await tx.updateOne({
         model: "student",
@@ -300,6 +312,13 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
         data: { sessions_remaining: { decrement: requiredSessions } },
       });
     }
+
+    await tx.create({
+      model: "scheduleLog",
+      data: {
+        scheduleId: newSchedule.id,
+      },
+    });
   });
 
   let reminderTime;
@@ -404,13 +423,23 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
     });
   }
 
-  if (isGroup && effectiveStudentIds.length > maxStudents) {
-    return errorResponse({
-      req,
-      next,
-      status: 400,
-      message: "EXCEEDS_MAX_STUDENTS",
-    });
+  const computedIsGroup = effectiveStudentIds.length > 1 ? true : Boolean(isGroup);
+
+  let normalizedMaxStudents =
+    maxStudents === "0" || maxStudents === 0 || maxStudents === "unlimited"
+      ? "unlimited"
+      : String(maxStudents || 1);
+
+  if (computedIsGroup && normalizedMaxStudents !== "unlimited") {
+    const max = parseInt(normalizedMaxStudents, 10);
+    if (!isNaN(max) && effectiveStudentIds.length > max) {
+      return errorResponse({
+        req,
+        next,
+        status: 400,
+        message: "EXCEEDED_MAX_STUDENTS",
+      });
+    }
   }
 
   /* check exist students, teacher, subject */
@@ -540,7 +569,7 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
     }
 
     schedulesToCreate.push({
-      studentId: isGroup ? null : effectiveStudentIds[0],
+      studentId: computedIsGroup ? null : (studentId || effectiveStudentIds[0]),
       teacherId,
       title,
       description,
@@ -550,8 +579,8 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
       end_time,
       subjectId: subject_id,
       is_recurring: true,
-      isGroup,
-      maxStudents: isGroup ? maxStudents : 1,
+      isGroup: computedIsGroup,
+      maxStudents: computedIsGroup ? normalizedMaxStudents : "1",
       day_of_week: dayjs.tz(date, req.timezone).format("dddd"),
       parent_recurring_id: parentRecurringId,
     });
@@ -573,14 +602,23 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
         });
 
         for (const sId of effectiveStudentIds) {
-          await tx.create({
-            model: "GroupScheduleStudent",
-            data: {
-              scheduleId: schedule.id,
-              studentId: sId,
-            },
-          });
+          if (computedIsGroup) {
+            await tx.create({
+              model: "GroupScheduleStudent",
+              data: {
+                scheduleId: schedule.id,
+                studentId: sId,
+              },
+            });
+          }
         }
+
+        await tx.create({
+          model: "scheduleLog",
+          data: {
+            scheduleId: schedule.id,
+          },
+        });
 
         createdSchedules.push({
           id: schedule.id,
@@ -794,9 +832,6 @@ export const getUserSchedules = asyncHandler(async (req, res, next) => {
   });
 });
 
-/* ------------------------------------------------------------------ */
-/*                  Delete a single session & its job                   */
-/* ------------------------------------------------------------------ */
 /* ------------------------------------------------------------------ */
 /*                  Delete a single session & its job                   */
 /* ------------------------------------------------------------------ */

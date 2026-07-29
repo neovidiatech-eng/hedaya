@@ -257,11 +257,30 @@ export const getStudentById = asyncHandler(async (req, res, next) => {
     }),
     db.findMany({
       model: "schedule",
-      where: { studentId: id },
+      where: {
+        OR: [
+          { studentId: id },
+          { groupStudents: { some: { studentId: id } } },
+        ],
+      },
       include: {
         teacher: {
           include: {
             user: true,
+          },
+        },
+        student: {
+          include: {
+            user: true,
+          },
+        },
+        groupStudents: {
+          include: {
+            student: {
+              include: {
+                user: true,
+              },
+            },
           },
         },
         subject: true,

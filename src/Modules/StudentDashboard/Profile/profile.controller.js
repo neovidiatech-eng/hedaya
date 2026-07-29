@@ -146,12 +146,20 @@ export const getDashboardStats = asyncHandler(async (req, res, next) => {
     }),
     db.count({
       model: "schedule",
-      where: { studentId: student.id },
+      where: {
+        OR: [
+          { studentId: student.id },
+          { groupStudents: { some: { studentId: student.id } } },
+        ],
+      },
     }),
     db.findMany({
       model: "schedule",
       where: {
-        studentId: student.id,
+        OR: [
+          { studentId: student.id },
+          { groupStudents: { some: { studentId: student.id } } },
+        ],
         start_time: {
           gte: startOfDay,
           lte: endOfDay,
@@ -166,6 +174,32 @@ export const getDashboardStats = asyncHandler(async (req, res, next) => {
                 id: true,
                 name: true,
                 email: true,
+              },
+            },
+          },
+        },
+        student: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+        groupStudents: {
+          include: {
+            student: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                  },
+                },
               },
             },
           },

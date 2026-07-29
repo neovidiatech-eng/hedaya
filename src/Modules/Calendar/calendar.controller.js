@@ -56,132 +56,77 @@ export const getStudentCalendar = asyncHandler(async (req, res, next) => {
   const startOfDay = now.startOf("day").toDate();
   const endOfDay = now.endOf("day").toDate();
 
+  const studentWhere = {
+    OR: [
+      { studentId: id },
+      { groupStudents: { some: { studentId: id } } },
+    ],
+  };
+
+  const studentInclude = {
+    teacher: {
+      select: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+            role: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    student: {
+      select: {
+        user: {
+          select: {
+            name: true,
+            email: true,
+            role: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    groupStudents: {
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                name: true,
+                email: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    subject: true,
+  };
+
   const [count, planned, sessions, toDaySessions] = await Promise.all([
     db.count({
       model: "schedule",
-      where: {
-        studentId: id,
-      },
-      include: {
-        teacher: {
-          select: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-                role: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        student: {
-          select: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-                role: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        subject: {
-          select: {
-            name: true,
-          },
-        },
-      },
+      where: studentWhere,
     }),
     db.count({
       model: "schedule",
       where: {
         status: { in: ["scheduled", "planned"] },
-        studentId: id,
-      },
-      include: {
-        teacher: {
-          select: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-                role: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        student: {
-          select: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-                role: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        subject: {
-          select: {
-            name: true,
-          },
-        },
+        ...studentWhere,
       },
     }),
     db.findMany({
       model: "schedule",
-      where: {
-        studentId: id,
-      },
-      include: {
-        teacher: {
-          select: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-                role: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        student: {
-          select: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-                role: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        subject: true,
-      },
+      where: studentWhere,
+      include: studentInclude,
     }),
     db.findMany({
       model: "schedule",
@@ -190,41 +135,9 @@ export const getStudentCalendar = asyncHandler(async (req, res, next) => {
           gte: startOfDay,
           lte: endOfDay,
         },
-        studentId: id,
+        ...studentWhere,
       },
-      include: {
-        teacher: {
-          select: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-                role: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        student: {
-          select: {
-            user: {
-              select: {
-                name: true,
-                email: true,
-                role: {
-                  select: {
-                    name: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-        subject: true,
-      },
+      include: studentInclude,
     }),
   ]);
   const formattedSessions = formatSchedules(sessions, req.timezone);

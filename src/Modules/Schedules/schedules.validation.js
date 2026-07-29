@@ -15,7 +15,7 @@ export const createSchedule = {
         .items(generalFeilds.id)
         .optional(),
       isGroup: Joi.boolean().optional(),
-      maxStudents: Joi.number().integer().min(1).optional(),
+      maxStudents: Joi.alternatives().try(Joi.number().integer().min(0), Joi.string()).optional(),
       teacherId: generalFeilds.id
         .messages({
           "string.empty": "TEACHER_ID_REQUIRED",
@@ -82,7 +82,7 @@ export const createRecurringSchedule = {
         .items(generalFeilds.id)
         .optional(),
       isGroup: Joi.boolean().optional(),
-      maxStudents: Joi.number().integer().min(1).optional(),
+      maxStudents: Joi.alternatives().try(Joi.number().integer().min(0), Joi.string()).optional(),
       teacherId: generalFeilds.id.required(),
       subject_id: generalFeilds.id.required(),
       title: generalFeilds.name.required(),
