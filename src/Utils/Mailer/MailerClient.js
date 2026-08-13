@@ -1,4 +1,17 @@
 import nodemailer from "nodemailer";
+import { BrevoClient } from "@getbrevo/brevo";
+
+let brevoInstance = null;
+
+export const getBrevoClient = () => {
+  const brevoApiKey = process.env.BREVO_API_KEY;
+  if (!brevoApiKey) return null;
+  if (!brevoInstance) {
+    brevoInstance = new BrevoClient({ apiKey: brevoApiKey });
+    console.log("📧 Brevo Client initialized successfully");
+  }
+  return brevoInstance;
+};
 
 const host = process.env.MAIL_HOST || "smtp.gmail.com";
 const port = Number(process.env.MAIL_PORT) || 587;
@@ -25,10 +38,13 @@ export const transporter = nodemailer.createTransport({
 // فحص الاتصال عند التشغيل لضمان استجابة السيرفر
 transporter.verify((error, success) => {
   if (error) {
-    console.error("❌ SMTP Connection Error:", error.message);
-    const user = process.env.MAIL_USER || process.env.APP_EMAIL;
-    if (!user) console.error("   - SMTP Auth user (MAIL_USER / APP_EMAIL) is missing or empty");
+    if (!getBrevoClient()) {
+      console.error("❌ SMTP Connection Error:", error.message);
+      const user = process.env.MAIL_USER || process.env.APP_EMAIL;
+      if (!user) console.error("   - SMTP Auth user (MAIL_USER / APP_EMAIL) is missing or empty");
+    }
   } else {
     console.log("📧 SMTP Server is ready to take messages");
   }
 });
+

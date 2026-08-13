@@ -1,4 +1,4 @@
-import { transporter } from "./MailerClient.js";
+import { transporter, getBrevoClient } from "./MailerClient.js";
 import { mailTemp } from "./MailTemp.js";
 import { getMessage } from "../i18n.js";
 import nodemailer from "nodemailer";
@@ -35,9 +35,31 @@ export const sendEmail = async ({
     actionText,
   });
 
-  const senderEmail = process.env.APP_EMAIL || process.env.MAIL_FROM || process.env.MAIL_USER || "noreply@hedayaacademy.com";
-  const senderName = "Hedaya Academy";
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || process.env.MAIL_FROM || process.env.MAIL_USER || process.env.APP_EMAIL || "noreply@hedaya-academy.com";
+  const senderName = process.env.BREVO_SENDER_NAME || "Hedaya-Academy";
 
+  // 1) Try sending via Brevo API if configured
+  const brevoClient = getBrevoClient();
+  if (brevoClient) {
+    try {
+      const response = await brevoClient.transactionalEmails.sendTransacEmail({
+        subject: emailSubject,
+        htmlContent: html,
+        textContent: emailText,
+        sender: { name: senderName, email: senderEmail },
+        to: [{ email: email, name: username || undefined }],
+      });
+
+      const messageId = response?.messageId || "brevo-sent";
+      console.log("📧 Email sent successfully via Brevo API:", messageId);
+      return { success: true, messageId };
+    } catch (brevoError) {
+      console.error("❌ Brevo API Error:", brevoError.message || brevoError);
+      console.warn("⚠️ Falling back to SMTP Mailer...");
+    }
+  }
+
+  // 2) Fallback to SMTP
   const mailOptions = {
     from: `"${senderName}" <${senderEmail}>`,
     replyTo: senderEmail,
@@ -51,11 +73,10 @@ export const sendEmail = async ({
   };
 
   try {
-    // 1) Send real email via SMTP
     const info = await transporter.sendMail(mailOptions);
-    console.log("📧 Email sent successfully:", info.messageId);
+    console.log("📧 Email sent successfully via SMTP:", info.messageId);
 
-    // 2) Save copy to IMAP Sent folder asynchronously (don't block the main flow)
+    // Save copy to IMAP Sent folder asynchronously (don't block the main flow)
     saveToImapSent(mailOptions).catch(err => {
       console.error("❌ Failed to save email to IMAP Sent folder:", err.message);
     });
