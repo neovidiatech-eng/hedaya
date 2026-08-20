@@ -28,7 +28,6 @@ export const globalRateLimiter = rateLimit({
   handler: rateLimitHandler("RATE_LIMIT_EXCEEDED"),
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
 });
 
 // ─── Auth limiter — login, signup, google auth ────────────────────────────────
@@ -38,7 +37,6 @@ export const authRateLimiter = rateLimit({
   handler: rateLimitHandler("RATE_LIMIT_AUTH"),
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
 });
 
 // ─── OTP limiter — resend-otp, forget-password ───────────────────────────────
@@ -48,5 +46,5 @@ export const otpRateLimiter = rateLimit({
   handler: rateLimitHandler("RATE_LIMIT_OTP"),
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req) => req.ip,
 });
+
