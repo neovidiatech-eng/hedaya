@@ -1514,7 +1514,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
       });
     }
 
-    if (session.status === "ongoing") {
+    if (isStudent && session.status === "ongoing") {
       if (!teacherActuallyAttended) {
         // Teacher absent => refund all students
         for (const sId of effectiveStudentIds) {
@@ -1658,19 +1658,16 @@ async function finalizeSession(scheduleId, t) {
   const log = session.scheduleLogs[0];
   if (!log) return;
 
-  let newStatus = "completed";
+  // Only mark missed if NEITHER teacher nor student joined.
+  // Do NOT automatically convert to "completed" on exit or time expiry.
+  // Leave session as "ongoing" so it remains pending until the student submits review.
   if (!log.joinTime_student && !log.joinTime_teacher) {
-    newStatus = "missed";
-  }
+    await db.updateOne({
+      model: "schedule",
+      where: { id: scheduleId },
+      data: { status: "missed" },
+    });
 
-  await db.updateOne({
-    model: "schedule",
-    where: { id: scheduleId },
-    data: { status: newStatus },
-  });
-
-  // Notify if missed
-  if (newStatus === "missed") {
     const studentUserIds = session.student?.user_id
       ? [session.student.user_id]
       : (session.groupStudents || []).map((g) => g.student?.user_id).filter(Boolean);
