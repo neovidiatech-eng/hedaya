@@ -109,8 +109,18 @@ export const createRecurringSchedule = {
         )
         .min(1)
         .required(),
-      startDate: Joi.date().iso().greater("now").required(),
-      endDate: Joi.date().iso().min(Joi.ref("startDate")).greater("now"),
+      startDate: Joi.date()
+        .iso()
+        .custom((value, helpers) => {
+          const startOfToday = new Date();
+          startOfToday.setHours(0, 0, 0, 0);
+          if (new Date(value) < startOfToday) {
+            return helpers.error("date.greater", { limit: "today" });
+          }
+          return value;
+        })
+        .required(),
+      endDate: Joi.date().iso().min(Joi.ref("startDate")),
       count: Joi.number().integer().min(1),
       notification_Time: Joi.string()
         .valid(...Object.values(notificationType))
