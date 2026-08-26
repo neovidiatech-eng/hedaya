@@ -5,8 +5,6 @@ let brevoInstance = null;
 
 export const getBrevoClient = () => {
   const brevoApiKey = process.env.BREVO_API_KEY;
-  console.log(brevoApiKey);
-  
   if (!brevoApiKey) return null;
   if (!brevoInstance) {
     brevoInstance = new BrevoClient({ apiKey: brevoApiKey });
