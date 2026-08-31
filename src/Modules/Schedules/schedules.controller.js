@@ -821,7 +821,32 @@ export const getUserSchedules = asyncHandler(async (req, res, next) => {
     orderBy: { start_time: "asc" },
   });
 
-  const formattedSchedules = formatSchedules(schedules, req.timezone);
+  const formattedSchedules = formatSchedules(schedules, req.timezone).map(
+  (schedule) => {
+    if (user.role?.name?.toLowerCase() !== "student") {
+      return schedule;
+    }
+
+    const log = schedule.scheduleLogs?.[0];
+    const now = new Date();
+
+    const isFinished = new Date(schedule.end_time) <= now;
+    const studentDidNotAttend = !log?.joinTime_student;
+
+    if (
+      isFinished &&
+      studentDidNotAttend &&
+      ["planned", "scheduled", "ongoing"].includes(schedule.status)
+    ) {
+      return {
+        ...schedule,
+        status: "missed",
+      };
+    }
+
+    return schedule;
+  }
+);
 
   return successResponse({
     res,
