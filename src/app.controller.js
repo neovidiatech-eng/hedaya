@@ -19,6 +19,7 @@ import { Server } from "socket.io";
 import { init_io } from "./Utils/Socket/index.js";
 import { socketAuthentication } from "./Middlewares/SocketAuth.js";
 import { createAdapter } from "@socket.io/redis-adapter";
+import { startCronJobs } from "./Utils/CronJobs/index.js";
 
 const bootstrap = async () => {
   const app = express();
@@ -98,5 +99,8 @@ const bootstrap = async () => {
   io.use(socketAuthentication);
 
   init_io(io);
+
+  // Start background cron jobs (e.g. mark missed sessions)
+  startCronJobs();
 };
 export default bootstrap;

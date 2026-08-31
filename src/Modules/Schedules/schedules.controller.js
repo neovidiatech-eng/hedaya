@@ -773,6 +773,7 @@ export const getUserSchedules = asyncHandler(async (req, res, next) => {
     model: "schedule",
     where,
     include: {
+      scheduleLogs: true,
       student: {
         include: {
           user: {
