@@ -21,6 +21,7 @@
     "seed:system-wallet": "node prisma/seeders/systemWallet.seeder.js",
     "seed:notifications": "node prisma/seeders/notifications.seeder.js",
     "seed:reviews": "node prisma/seeders/reviews.seeder.js",
+    "seed:role-permissions": "node prisma/seeders/rolePermission.seeder.js",
     "seed:all": "npx prisma db seed"
   },
   "keywords": [],
