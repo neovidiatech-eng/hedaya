@@ -27,7 +27,7 @@ router.get(
 router.get(
   "/my-students",
   authentication(),
-  authorizeResource("teachers"),
+  authorizeResource("students"),
   teacherController.getMyStudents,
 );
 
