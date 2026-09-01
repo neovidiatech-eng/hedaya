@@ -1394,6 +1394,8 @@ export const leaveSession = asyncHandler(async (req, res, next) => {
   const user = req.user;
   const role = user.role?.name?.toLowerCase();
 
+  console.log(`[leaveSession] Request received - scheduleId: ${id}, userId: ${user?.id}, role: ${role}`);
+
   const log = await db.findFirst({
     model: "scheduleLog",
     where: { scheduleId: id },
@@ -1401,6 +1403,7 @@ export const leaveSession = asyncHandler(async (req, res, next) => {
   });
 
   if (!log) {
+    console.log(`[leaveSession] Log not found for scheduleId: ${id}`);
     return errorResponse({ req, next, status: 404, message: "LOG_NOT_FOUND" });
   }
 
@@ -1412,18 +1415,26 @@ export const leaveSession = asyncHandler(async (req, res, next) => {
   const MIN_ATTENDANCE_RATIO = 0.85;
   const MIN_ATTENDANCE_MS = SESSION_DURATION_MS * MIN_ATTENDANCE_RATIO;
 
+  console.log(`[leaveSession] Session ${id} specs - durationMs: ${SESSION_DURATION_MS}, minAttendanceMs: ${MIN_ATTENDANCE_MS}, nowUTC: ${nowUTC.toISOString()}`);
+
   if (role === "student") {
-    if (!log.joinTime_student)
+    if (!log.joinTime_student) {
+      console.log(`[leaveSession] Student ${user?.id} attempted to leave schedule ${id} but never joined.`);
       return errorResponse({ req, next, status: 400, message: "NEVER_JOINED" });
+    }
     updateData.leaveTime_student = nowUTC;
     const duration = (nowUTC - log.joinTime_student) / 60000;
     updateData.duration_student = duration;
+    console.log(`[leaveSession] Student left schedule ${id} - joinTime: ${log.joinTime_student}, leaveTime: ${nowUTC}, durationMinutes: ${duration.toFixed(2)}`);
   } else if (role === "teacher") {
-    if (!log.joinTime_teacher)
+    if (!log.joinTime_teacher) {
+      console.log(`[leaveSession] Teacher ${user?.id} attempted to leave schedule ${id} but never joined.`);
       return errorResponse({ req, next, status: 400, message: "NEVER_JOINED" });
+    }
     updateData.leaveTime_teacher = nowUTC;
     const duration = (nowUTC - log.joinTime_teacher) / 60000;
     updateData.duration_teacher = duration;
+    console.log(`[leaveSession] Teacher left schedule ${id} - joinTime: ${log.joinTime_teacher}, leaveTime: ${nowUTC}, durationMinutes: ${duration.toFixed(2)}`);
   }
 
   await db.updateOne({
@@ -1434,6 +1445,7 @@ export const leaveSession = asyncHandler(async (req, res, next) => {
 
   // If session end time passed, finalize
   if (nowUTC >= session.end_time) {
+    console.log(`[leaveSession] End time passed for schedule ${id}. Calling finalizeSession.`);
     await finalizeSession(id, req.t);
   } else {
     const updatedLog = await db.findFirst({
@@ -1441,25 +1453,39 @@ export const leaveSession = asyncHandler(async (req, res, next) => {
       where: { id: log.id },
     });
 
+    const studentAttendedMs =
+      updatedLog.leaveTime_student && updatedLog.joinTime_student
+        ? updatedLog.leaveTime_student - updatedLog.joinTime_student
+        : 0;
+    const teacherAttendedMs =
+      updatedLog.leaveTime_teacher && updatedLog.joinTime_teacher
+        ? updatedLog.leaveTime_teacher - updatedLog.joinTime_teacher
+        : 0;
+
     // Student completed 85%+ of the session → allow finalize even if teacher is still inside
     const studentAttendedEnough =
       updatedLog.leaveTime_student &&
       updatedLog.joinTime_student &&
-      (updatedLog.leaveTime_student - updatedLog.joinTime_student) >= MIN_ATTENDANCE_MS;
+      studentAttendedMs >= MIN_ATTENDANCE_MS;
 
     // Teacher completed 85%+ of the session → allow finalize even if student is still inside
     const teacherAttendedEnough =
       updatedLog.leaveTime_teacher &&
       updatedLog.joinTime_teacher &&
-      (updatedLog.leaveTime_teacher - updatedLog.joinTime_teacher) >= MIN_ATTENDANCE_MS;
+      teacherAttendedMs >= MIN_ATTENDANCE_MS;
 
     // Finalize if both have left OR if the leaving party has met the 85% threshold
     const bothLeft = updatedLog.leaveTime_student && updatedLog.leaveTime_teacher;
     const studentLeftEarly = role === "student" && studentAttendedEnough;
     const teacherLeftEarly = role === "teacher" && teacherAttendedEnough;
 
+    console.log(`[leaveSession] Schedule ${id} evaluation before end_time - bothLeft: ${!!bothLeft}, studentAttendedEnough: ${studentAttendedEnough} (${studentAttendedMs}ms), teacherAttendedEnough: ${teacherAttendedEnough} (${teacherAttendedMs}ms), studentLeftEarly: ${studentLeftEarly}, teacherLeftEarly: ${teacherLeftEarly}`);
+
     if (bothLeft || studentLeftEarly || teacherLeftEarly) {
+      console.log(`[leaveSession] Finalize conditions met for schedule ${id}. Calling finalizeSession.`);
       await finalizeSession(id, req.t);
+    } else {
+      console.log(`[leaveSession] Schedule ${id} remains active - waiting for session end or remaining participant.`);
     }
   }
   return successResponse({ res, req, status: 200, message: "LEFT_SUCCESS" });
@@ -1469,6 +1495,8 @@ export const submitReview = asyncHandler(async (req, res, next) => {
   const { id } = req.params;
   const { rating, comment } = req.body;
   const user = req.user;
+
+  console.log(`[submitReview] Request received - scheduleId: ${id}, reviewerId: ${user?.id}, rating: ${rating}, comment: "${comment || ""}"`);
 
   const session = await db.findOne({
     model: "schedule",
@@ -1482,6 +1510,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
   });
 
   if (!session) {
+    console.log(`[submitReview] Session ${id} not found.`);
     return errorResponse({
       req,
       next,
@@ -1493,6 +1522,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
   const allowedStatuses = ["ongoing", "completed", "missed"];
 
   if (!allowedStatuses.includes(session.status)) {
+    console.log(`[submitReview] Session ${id} status "${session.status}" not allowed for review.`);
     return errorResponse({
       req,
       next,
@@ -1505,6 +1535,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
   const deadline = new Date(session.end_time.getTime() + 48 * 60 * 60 * 1000);
 
   if (now > deadline) {
+    console.log(`[submitReview] Review window expired for session ${id}. Deadline was ${deadline.toISOString()}, current time is ${now.toISOString()}`);
     return errorResponse({
       req,
       next,
@@ -1521,6 +1552,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
   const isTeacher = user.id === session.teacher?.user?.id;
 
   if (!isStudent && !isTeacher) {
+    console.log(`[submitReview] User ${user.id} is neither student nor teacher for session ${id}.`);
     return errorResponse({
       req,
       next,
@@ -1532,6 +1564,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
   let log = session.scheduleLogs?.[0];
 
   if (!log) {
+    console.log(`[submitReview] No schedule log found for session ${id}, creating default log.`);
     log = await db.upsertOne({
       model: "scheduleLog",
       where: { scheduleId: id },
@@ -1548,8 +1581,11 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 
   const studentActuallyAttended = Boolean(log.joinTime_student);
 
+  console.log(`[submitReview] Attendance check for session ${id} - teacherActuallyAttended: ${teacherActuallyAttended}, studentActuallyAttended: ${studentActuallyAttended}`);
+
   // الطالب الغايب ماينفعش يعمل review
   if (isStudent && !studentActuallyAttended) {
+    console.log(`[submitReview] Absent student ${user.id} attempted to review session ${id}.`);
     return errorResponse({
       req,
       next,
@@ -1560,6 +1596,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 
   // المدرس الغايب ماينفعش يعمل review
   if (isTeacher && !teacherActuallyAttended) {
+    console.log(`[submitReview] Absent teacher ${user.id} attempted to review session ${id}.`);
     return errorResponse({
       req,
       next,
@@ -1577,6 +1614,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
   });
 
   if (existingReview) {
+    console.log(`[submitReview] User ${user.id} already submitted a review for session ${id}.`);
     return errorResponse({
       req,
       next,
@@ -1599,6 +1637,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 
   await db.transaction(async (tx) => {
     if (log.isStudentAttended !== studentActuallyAttended) {
+      console.log(`[submitReview] Updating log.isStudentAttended to ${studentActuallyAttended} for log ${log.id}`);
       await tx.updateOne({
         model: "scheduleLog",
         where: { id: log.id },
@@ -1608,6 +1647,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 
     if (isStudent && session.status === "ongoing") {
       if (!teacherActuallyAttended) {
+        console.log(`[submitReview] Teacher absent in ongoing session ${id}. Refunding student(s): ${effectiveStudentIds.join(", ")}`);
         // Teacher absent => refund all students
         for (const sId of effectiveStudentIds) {
           await tx.updateOne({
@@ -1654,6 +1694,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
           if (matchedRule) {
             const discountFactor = 1 - matchedRule.discountPercentage / 100;
             payoutAmount = payoutAmount * discountFactor;
+            console.log(`[submitReview] Applied late discount (${matchedRule.discountPercentage}% off) for teacher in session ${id}. New payout: ${payoutAmount}`);
           }
         }
 
@@ -1665,6 +1706,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
         });
 
         if (teacherWallet) {
+          console.log(`[submitReview] Crediting payout ${payoutAmount} to teacher wallet ${teacherWallet.id}`);
           await tx.updateOne({
             model: "Wallet",
             where: { id: teacherWallet.id },
@@ -1684,6 +1726,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 
         // Only count attended session if student really attended
         if (studentActuallyAttended) {
+          console.log(`[submitReview] Incrementing sessions_attended for student(s): ${effectiveStudentIds.join(", ")}`);
           for (const sId of effectiveStudentIds) {
             await tx.updateOne({
               model: "student",
@@ -1708,6 +1751,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
         role,
       },
     });
+    console.log(`[submitReview] Created review record ID ${review.id} for session ${id}`);
   });
 
   await updateAverageRating(revieweeId);
@@ -1718,6 +1762,8 @@ export const submitReview = asyncHandler(async (req, res, next) => {
     message: req.t("NOTIFICATION_REVIEW_RECEIVED_MSG", { rating }),
     type: "review_received",
   });
+
+  console.log(`[submitReview] Review process complete for session ${id}. Notification sent to user ${revieweeId}`);
 
   return successResponse({
     res,
@@ -1733,6 +1779,8 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 /* ------------------------------------------------------------------ */
 
 async function finalizeSession(scheduleId, t) {
+  console.log(`[finalizeSession] Called for scheduleId: ${scheduleId}`);
+
   const session = await db.findOne({
     model: "schedule",
     where: { id: scheduleId },
@@ -1744,11 +1792,21 @@ async function finalizeSession(scheduleId, t) {
     },
   });
 
-  if (!session || session.status === "completed" || session.status === "missed")
+  if (!session) {
+    console.log(`[finalizeSession] Session ${scheduleId} not found.`);
     return;
+  }
+
+  if (session.status === "completed" || session.status === "missed") {
+    console.log(`[finalizeSession] Session ${scheduleId} is already in terminal state "${session.status}". Skipping.`);
+    return;
+  }
 
   const log = session.scheduleLogs[0];
-  if (!log) return;
+  if (!log) {
+    console.log(`[finalizeSession] No scheduleLog found for session ${scheduleId}. Cannot finalize.`);
+    return;
+  }
 
   const SESSION_DURATION_MS = session.end_time - session.start_time;
   const MIN_ATTENDANCE_RATIO = 0.85;
@@ -1773,6 +1831,8 @@ async function finalizeSession(scheduleId, t) {
   const studentAttended = studentAttendedMs >= MIN_ATTENDANCE_MS;
   const bothAttended = teacherAttended && studentAttended;
 
+  console.log(`[finalizeSession] Attendance stats for schedule ${scheduleId} - durationMs: ${SESSION_DURATION_MS}, minReqMs: ${MIN_ATTENDANCE_MS} | teacherJoined: ${teacherJoined}, teacherAttendedMs: ${teacherAttendedMs}, teacherAttended: ${teacherAttended} | studentJoined: ${studentJoined}, studentAttendedMs: ${studentAttendedMs}, studentAttended: ${studentAttended} | bothAttended: ${bothAttended}`);
+
   const studentUserIds = session.student?.user_id
     ? [session.student.user_id]
     : (session.groupStudents || []).map((g) => g.student?.user_id).filter(Boolean);
@@ -1785,6 +1845,7 @@ async function finalizeSession(scheduleId, t) {
    * PATH A: Both attended 85%+ → completed
    * ──────────────────────────────────────────────────────────── */
   if (bothAttended) {
+    console.log(`[finalizeSession] PATH A: Both attended >= 85%. Completing session ${scheduleId}.`);
     const sessionDurationHours = SESSION_DURATION_MS / (60 * 1000 * 60);
     let payoutAmount = sessionDurationHours * (session.teacher?.hour_price || 0);
 
@@ -1798,6 +1859,7 @@ async function finalizeSession(scheduleId, t) {
       const matchedRule = sortedRules.find((r) => diffMinutes >= r.lateMinutes);
       if (matchedRule) {
         payoutAmount *= 1 - matchedRule.discountPercentage / 100;
+        console.log(`[finalizeSession] Applied late discount (${matchedRule.discountPercentage}%) for teacher in session ${scheduleId}. Payout: ${payoutAmount}`);
       }
     }
 
@@ -1820,6 +1882,7 @@ async function finalizeSession(scheduleId, t) {
           where: { userId: session.teacher.user_id },
         });
         if (teacherWallet) {
+          console.log(`[finalizeSession] Crediting payout ${payoutAmount} to teacher wallet ${teacherWallet.id}`);
           await tx.updateOne({
             model: "Wallet",
             where: { id: teacherWallet.id },
@@ -1871,6 +1934,7 @@ async function finalizeSession(scheduleId, t) {
       message: `تم إتمام الجلسة "${session.title}" بين الطالب: ${studentName} والمدرس: ${session.teacher?.user?.name || "Teacher"}.`,
       type: "session_completed",
     });
+    console.log(`[finalizeSession] Session ${scheduleId} finalized successfully as COMPLETED.`);
     return;
   }
 
@@ -1883,8 +1947,11 @@ async function finalizeSession(scheduleId, t) {
   const sessionEnded = new Date() >= session.end_time;
   const neitherJoined = !studentJoined && !teacherJoined;
 
+  console.log(`[finalizeSession] PATH B Check for schedule ${scheduleId} - neitherJoined: ${neitherJoined}, bothLeft: ${bothLeft}, sessionEnded: ${sessionEnded}`);
+
   if (neitherJoined || bothLeft || sessionEnded) {
     const shouldRefund = !teacherAttended; // teacher didn't attend → refund student
+    console.log(`[finalizeSession] Marking session ${scheduleId} as MISSED. shouldRefund: ${shouldRefund}`);
 
     const effectiveStudentIds = session.isGroup
       ? (session.groupStudents || []).map((g) => g.studentId)
@@ -1900,6 +1967,7 @@ async function finalizeSession(scheduleId, t) {
       });
 
       if (shouldRefund && effectiveStudentIds.length > 0) {
+        console.log(`[finalizeSession] Refunding remaining sessions for student(s): ${effectiveStudentIds.join(", ")}`);
         for (const sId of effectiveStudentIds) {
           await tx.updateOne({
             model: "student",
