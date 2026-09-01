@@ -343,6 +343,7 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
       addNotificationJob({
         scheduleId: newSchedule.id,
         studentId: sId,
+        teacherId,
         type: notificationJobType,
         sendAt: reminderTime,
       });
@@ -354,6 +355,27 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
     where: { id: teacherId },
     include: { user: true },
   });
+
+  // Bug #4 Fix: Notify teacher and all students immediately upon session creation
+  if (teacherInfo?.user_id) {
+    await createNotification({
+      userId: teacherInfo.user_id,
+      title: "تم جدولة جلسة جديدة",
+      message: `تم جدولة جلسة "${title}" في ${new Date(startTime).toLocaleString("ar-EG", { timeZone: req.timezone })}.`,
+      type: "session_created",
+    });
+  }
+
+  for (const st of students) {
+    if (st.user?.id) {
+      await createNotification({
+        userId: st.user.id,
+        title: "تم جدولة جلسة جديدة",
+        message: `تم جدولة جلستك "${title}" مع المدرس: ${teacherInfo?.user?.name || "المدرس"} في ${new Date(startTime).toLocaleString("ar-EG", { timeZone: req.timezone })}.`,
+        type: "session_created",
+      });
+    }
+  }
 
   await createAdminNotification({
     title: "تم جدولة الجلسة",
@@ -664,6 +686,7 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
           addNotificationJob({
             scheduleId: createdSchedules[index]?.id,
             studentId: sId,
+            teacherId,
             type: notificationJobType,
             sendAt: reminderTime,
           });
@@ -674,6 +697,28 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
 
   if (createdSchedules.length > 0) {
     const teacherInfo = await db.findOne({ model: "teacher", where: { id: teacherId }, include: { user: true } });
+
+    // Bug #4 Fix: Notify teacher and all students immediately upon recurring session creation
+    if (teacherInfo?.user_id) {
+      await createNotification({
+        userId: teacherInfo.user_id,
+        title: "تم جدولة جلسات متكررة",
+        message: `تم جدولة ${createdSchedules.length} جلسات متكررة "${title}" في جدولك.`,
+        type: "session_created",
+      });
+    }
+
+    for (const st of students) {
+      if (st.user?.id) {
+        await createNotification({
+          userId: st.user.id,
+          title: "تم جدولة جلسات متكررة",
+          message: `تم جدولة ${createdSchedules.length} جلسات متكررة "${title}" مع المدرس: ${teacherInfo?.user?.name || "المدرس"}.`,
+          type: "session_created",
+        });
+      }
+    }
+
     await createAdminNotification({
       title: "تم جدولة الجلسات المتكررة",
       message: isGroup
