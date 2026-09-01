@@ -1408,6 +1408,10 @@ export const leaveSession = asyncHandler(async (req, res, next) => {
   const nowUTC = getNowUTC().toDate();
   const updateData = {};
 
+  const SESSION_DURATION_MS = session.end_time - session.start_time;
+  const MIN_ATTENDANCE_RATIO = 0.85;
+  const MIN_ATTENDANCE_MS = SESSION_DURATION_MS * MIN_ATTENDANCE_RATIO;
+
   if (role === "student") {
     if (!log.joinTime_student)
       return errorResponse({ req, next, status: 400, message: "NEVER_JOINED" });
@@ -1432,12 +1436,29 @@ export const leaveSession = asyncHandler(async (req, res, next) => {
   if (nowUTC >= session.end_time) {
     await finalizeSession(id, req.t);
   } else {
-    // Check if both have left
     const updatedLog = await db.findFirst({
       model: "scheduleLog",
       where: { id: log.id },
     });
-    if (updatedLog.leaveTime_student && updatedLog.leaveTime_teacher) {
+
+    // Student completed 85%+ of the session → allow finalize even if teacher is still inside
+    const studentAttendedEnough =
+      updatedLog.leaveTime_student &&
+      updatedLog.joinTime_student &&
+      (updatedLog.leaveTime_student - updatedLog.joinTime_student) >= MIN_ATTENDANCE_MS;
+
+    // Teacher completed 85%+ of the session → allow finalize even if student is still inside
+    const teacherAttendedEnough =
+      updatedLog.leaveTime_teacher &&
+      updatedLog.joinTime_teacher &&
+      (updatedLog.leaveTime_teacher - updatedLog.joinTime_teacher) >= MIN_ATTENDANCE_MS;
+
+    // Finalize if both have left OR if the leaving party has met the 85% threshold
+    const bothLeft = updatedLog.leaveTime_student && updatedLog.leaveTime_teacher;
+    const studentLeftEarly = role === "student" && studentAttendedEnough;
+    const teacherLeftEarly = role === "teacher" && teacherAttendedEnough;
+
+    if (bothLeft || studentLeftEarly || teacherLeftEarly) {
       await finalizeSession(id, req.t);
     }
   }
@@ -1729,38 +1750,189 @@ async function finalizeSession(scheduleId, t) {
   const log = session.scheduleLogs[0];
   if (!log) return;
 
-  // Only mark missed if NEITHER teacher nor student joined.
-  // Do NOT automatically convert to "completed" on exit or time expiry.
-  // Leave session as "ongoing" so it remains pending until the student submits review.
-  if (!log.joinTime_student && !log.joinTime_teacher) {
-    await db.updateOne({
-      model: "schedule",
-      where: { id: scheduleId },
-      data: { status: "missed" },
+  const SESSION_DURATION_MS = session.end_time - session.start_time;
+  const MIN_ATTENDANCE_RATIO = 0.85;
+  const MIN_ATTENDANCE_MS = SESSION_DURATION_MS * MIN_ATTENDANCE_RATIO;
+
+  // Calculate actual attended duration for teacher and student
+  const teacherJoined = Boolean(log.joinTime_teacher);
+  const studentJoined = Boolean(log.joinTime_student);
+
+  // If a leaveTime is recorded use it, otherwise use end_time as the cap
+  const teacherLeaveTime = log.leaveTime_teacher || session.end_time;
+  const studentLeaveTime = log.leaveTime_student || session.end_time;
+
+  const teacherAttendedMs = teacherJoined
+    ? teacherLeaveTime - log.joinTime_teacher
+    : 0;
+  const studentAttendedMs = studentJoined
+    ? studentLeaveTime - log.joinTime_student
+    : 0;
+
+  const teacherAttended = teacherAttendedMs >= MIN_ATTENDANCE_MS;
+  const studentAttended = studentAttendedMs >= MIN_ATTENDANCE_MS;
+  const bothAttended = teacherAttended && studentAttended;
+
+  const studentUserIds = session.student?.user_id
+    ? [session.student.user_id]
+    : (session.groupStudents || []).map((g) => g.student?.user_id).filter(Boolean);
+
+  const studentName = session.isGroup
+    ? `عدد ${session.groupStudents?.length || 0} طلاب`
+    : (session.student?.user?.name || "Student");
+
+  /* ────────────────────────────────────────────────────────────
+   * PATH A: Both attended 85%+ → completed
+   * ──────────────────────────────────────────────────────────── */
+  if (bothAttended) {
+    const sessionDurationHours = SESSION_DURATION_MS / (60 * 1000 * 60);
+    let payoutAmount = sessionDurationHours * (session.teacher?.hour_price || 0);
+
+    // Apply late-teacher discount if applicable
+    if (log?.isTeacherLate && log?.joinTime_teacher) {
+      const { getSettingsData } = await import("../Settings/settings.controller.js");
+      const settings = await getSettingsData();
+      const rules = settings.lateDiscountRules || [];
+      const diffMinutes = (log.joinTime_teacher.getTime() - session.start_time.getTime()) / 60000;
+      const sortedRules = [...rules].sort((a, b) => b.lateMinutes - a.lateMinutes);
+      const matchedRule = sortedRules.find((r) => diffMinutes >= r.lateMinutes);
+      if (matchedRule) {
+        payoutAmount *= 1 - matchedRule.discountPercentage / 100;
+      }
+    }
+
+    const effectiveStudentIds = session.isGroup
+      ? (session.groupStudents || []).map((g) => g.studentId)
+      : session.studentId
+      ? [session.studentId]
+      : [];
+
+    await db.transaction(async (tx) => {
+      await tx.updateOne({
+        model: "schedule",
+        where: { id: scheduleId },
+        data: { status: "completed" },
+      });
+
+      if (payoutAmount > 0) {
+        const teacherWallet = await tx.findFirst({
+          model: "Wallet",
+          where: { userId: session.teacher.user_id },
+        });
+        if (teacherWallet) {
+          await tx.updateOne({
+            model: "Wallet",
+            where: { id: teacherWallet.id },
+            data: { balance: { increment: payoutAmount } },
+          });
+        }
+      }
+
+      for (const sId of effectiveStudentIds) {
+        await tx.updateOne({
+          model: "student",
+          where: { id: sId },
+          data: { sessions_attended: { increment: 1 } },
+        });
+      }
+
+      if (log) {
+        await tx.updateOne({
+          model: "scheduleLog",
+          where: { id: log.id },
+          data: { isTeacherCompleted: true, isStudentAttended: true },
+        });
+      }
     });
 
-    const studentUserIds = session.student?.user_id
-      ? [session.student.user_id]
-      : (session.groupStudents || []).map((g) => g.student?.user_id).filter(Boolean);
+    if (session.teacher?.user_id) {
+      await createNotification({
+        userId: session.teacher.user_id,
+        title: t ? t("NOTIFICATION_SESSION_COMPLETED_TITLE") : "تم إتمام الجلسة",
+        message: t
+          ? t("NOTIFICATION_SESSION_COMPLETED_MSG", { title: session.title })
+          : `تم إتمام الجلسة "${session.title}" تلقائياً وإضافة المكافأة لمحفظتك.`,
+        type: "session_completed",
+      });
+    }
+    for (const uId of studentUserIds) {
+      await createNotification({
+        userId: uId,
+        title: t ? t("NOTIFICATION_SESSION_COMPLETED_TITLE") : "تم إتمام الجلسة",
+        message: t
+          ? t("NOTIFICATION_SESSION_COMPLETED_MSG", { title: session.title })
+          : `تم إتمام الجلسة "${session.title}" بنجاح.`,
+        type: "session_completed",
+      });
+    }
+
+    await createAdminNotification({
+      title: "تم إتمام الجلسة تلقائياً",
+      message: `تم إتمام الجلسة "${session.title}" بين الطالب: ${studentName} والمدرس: ${session.teacher?.user?.name || "Teacher"}.`,
+      type: "session_completed",
+    });
+    return;
+  }
+
+  /* ────────────────────────────────────────────────────────────
+   * PATH B: One or both didn't meet 85% → missed
+   * ──────────────────────────────────────────────────────────── */
+  // Only mark missed if NEITHER joined at all, OR if it's confirmed both have left
+  // and at least one didn't meet the threshold.
+  const bothLeft = Boolean(log.leaveTime_student && log.leaveTime_teacher);
+  const sessionEnded = new Date() >= session.end_time;
+  const neitherJoined = !studentJoined && !teacherJoined;
+
+  if (neitherJoined || bothLeft || sessionEnded) {
+    const shouldRefund = !teacherAttended; // teacher didn't attend → refund student
+
+    const effectiveStudentIds = session.isGroup
+      ? (session.groupStudents || []).map((g) => g.studentId)
+      : session.studentId
+      ? [session.studentId]
+      : [];
+
+    await db.transaction(async (tx) => {
+      await tx.updateOne({
+        model: "schedule",
+        where: { id: scheduleId },
+        data: { status: "missed" },
+      });
+
+      if (shouldRefund && effectiveStudentIds.length > 0) {
+        for (const sId of effectiveStudentIds) {
+          await tx.updateOne({
+            model: "student",
+            where: { id: sId },
+            data: { sessions_remaining: { increment: 1 } },
+          });
+        }
+      }
+    });
 
     for (const uId of studentUserIds) {
       await createNotification({
         userId: uId,
-        title: t ? t("NOTIFICATION_SESSION_MISSED_TITLE") : "Session Missed",
+        title: t ? t("NOTIFICATION_SESSION_MISSED_TITLE") : "جلسة فائتة",
         message: t
           ? t("NOTIFICATION_SESSION_MISSED_MSG", { title: session.title })
-          : `The session ${session.title} was marked as missed.`,
+          : `تم اعتبار الجلسة "${session.title}" فائتة.`,
         type: "session_missed",
       });
     }
 
-    const studentName = session.isGroup
-      ? `عدد ${session.groupStudents?.length || 0} طلاب`
-      : (session.student?.user?.name || "Student");
+    let reasonNote = "";
+    if (!teacherAttended && !studentAttended) {
+      reasonNote = " (لم يحضر أي طرف بما يكفي)";
+    } else if (!teacherAttended) {
+      reasonNote = " (المعلم لم يحضر بما يكفي — تم رد الجلسة للطالب)";
+    } else {
+      reasonNote = " (الطالب لم يحضر بما يكفي)";
+    }
 
     await createAdminNotification({
       title: "تم تفويت الجلسة",
-      message: `تم تفويت الجلسة "${session.title}" بين الطالب: ${studentName} والمدرس: ${session.teacher?.user?.name || "Teacher"}.`,
+      message: `تم تفويت الجلسة "${session.title}" بين الطالب: ${studentName} والمدرس: ${session.teacher?.user?.name || "Teacher"}${reasonNote}.`,
       type: "session_missed",
     });
   }

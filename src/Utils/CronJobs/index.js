@@ -75,9 +75,25 @@ const markMissedSessions = () => {
                     try {
                          const log = session.scheduleLogs?.[0];
 
+                         const SESSION_DURATION_MS = session.end_time - session.start_time;
+                         const MIN_ATTENDANCE_MS = SESSION_DURATION_MS * 0.85;
+
+                         // Use end_time as cap if leaveTime not recorded
+                         const teacherLeaveTime = log?.leaveTime_teacher || session.end_time;
+                         const studentLeaveTime = log?.leaveTime_student || session.end_time;
+
+                         const teacherAttendedMs = log?.joinTime_teacher
+                              ? teacherLeaveTime - log.joinTime_teacher
+                              : 0;
+                         const studentAttendedMs = log?.joinTime_student
+                              ? studentLeaveTime - log.joinTime_student
+                              : 0;
+
                          const teacherJoined = Boolean(log?.joinTime_teacher);
                          const studentJoined = Boolean(log?.joinTime_student);
-                         const bothAttended  = teacherJoined && studentJoined;
+                         const teacherAttended = teacherAttendedMs >= MIN_ATTENDANCE_MS;
+                         const studentAttended = studentAttendedMs >= MIN_ATTENDANCE_MS;
+                         const bothAttended   = teacherAttended && studentAttended;
 
                          // Determine student IDs
                          const effectiveStudentIds = session.isGroup
@@ -205,7 +221,7 @@ const markMissedSessions = () => {
                          /* ─────────────────────────────────────────────────────
                           *  PATH B: At least one party absent → missed immediately
                           * ───────────────────────────────────────────────────── */
-                         const shouldRefund = !teacherJoined; // teacher absent → refund student
+                         const shouldRefund = !teacherAttended; // teacher didn't attend → refund student
 
                          await db.transaction(async (tx) => {
                               await tx.updateOne({
