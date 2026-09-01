@@ -23,6 +23,14 @@ import { startCronJobs } from "./Utils/CronJobs/index.js";
 
 const bootstrap = async () => {
   const app = express();
+  app.set(
+    "trust proxy",
+    process.env.TRUST_PROXY
+      ? isNaN(process.env.TRUST_PROXY)
+        ? process.env.TRUST_PROXY
+        : Number(process.env.TRUST_PROXY)
+      : 1,
+  );
   const port = process.env.PORT || 3001;
 
   // ── ENV DEBUG DUMP (remove after confirming env vars are correct) ──
