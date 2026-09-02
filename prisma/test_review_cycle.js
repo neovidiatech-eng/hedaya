@@ -34,8 +34,8 @@ async function runTestCycle() {
       model: "Wallet",
       data: {
         userId: teacher.user_id,
+        type: "Teacher",
         balance: 0,
-        currency: "USD",
       },
     });
   }
@@ -50,15 +50,21 @@ async function runTestCycle() {
   const startTime = new Date(now.getTime() - 60 * 60 * 1000); // 1 hr ago
   const endTime = new Date(now.getTime() - 10 * 60 * 1000);   // 10 mins ago
 
+  const subject = await db.findFirst({
+    model: "subjects",
+  });
+
   const schedule = await db.create({
     model: "schedule",
     data: {
       title: "Test Review Cycle Session",
+      link: "https://example.com/test-session",
       start_time: startTime,
       end_time: endTime,
       status: "ongoing",
       teacherId: teacher.id,
       studentId: student.id,
+      ...(subject?.id ? { subjectId: subject.id } : {}),
       scheduleLogs: {
         create: {
           joinTime_teacher: startTime,
@@ -92,9 +98,9 @@ async function runTestCycle() {
     const isStudent = false; // Teacher submitting
     const isTeacher = true;
     const effectiveStudentIds = session.studentId ? [session.studentId] : [];
-    const log = session.scheduleLogs[0];
-    const teacherActuallyAttended = Boolean(log.joinTime_teacher);
-    const studentActuallyAttended = Boolean(log.joinTime_student);
+    const log = Array.isArray(session.scheduleLogs) ? session.scheduleLogs[0] : session.scheduleLogs;
+    const teacherActuallyAttended = Boolean(log?.joinTime_teacher);
+    const studentActuallyAttended = Boolean(log?.joinTime_student);
 
     await db.transaction(async (tx) => {
       if (isStudent && session.status === "ongoing") {
@@ -132,9 +138,9 @@ async function runTestCycle() {
 
     const isStudent = true; // Student submitting
     const effectiveStudentIds = session.studentId ? [session.studentId] : [];
-    const log = session.scheduleLogs[0];
-    const teacherActuallyAttended = Boolean(log.joinTime_teacher);
-    const studentActuallyAttended = Boolean(log.joinTime_student);
+    const log = Array.isArray(session.scheduleLogs) ? session.scheduleLogs[0] : session.scheduleLogs;
+    const teacherActuallyAttended = Boolean(log?.joinTime_teacher);
+    const studentActuallyAttended = Boolean(log?.joinTime_student);
 
     await db.transaction(async (tx) => {
       if (isStudent && session.status === "ongoing") {
@@ -206,7 +212,7 @@ async function runTestCycle() {
 
     if (!session || session.status === "completed" || session.status === "missed") return;
 
-    const log = session.scheduleLogs[0];
+    const log = Array.isArray(session.scheduleLogs) ? session.scheduleLogs[0] : session.scheduleLogs;
     if (!log) return;
 
     if (!log.joinTime_student && !log.joinTime_teacher) {
