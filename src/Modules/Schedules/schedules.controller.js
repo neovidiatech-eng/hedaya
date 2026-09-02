@@ -15,6 +15,7 @@ import { nanoid } from "nanoid";
 
 import * as db from "../../database/dbService.js";
 import { notificationType } from "../../Utils/Enums/sessions.js";
+import { studentPaidStatus } from "../../Utils/Enums/students.js";
 import {
   addNotificationJob,
   removeNotificationJob,
@@ -1250,7 +1251,7 @@ export const joinSession = asyncHandler(async (req, res, next) => {
   const user = req.user;
   const role = user.role?.name?.toLowerCase();
 
-  const settings = await getSettingsData();
+
   
 
   const session = await db.findOne({ model: "schedule", where: { id } });
@@ -1279,17 +1280,7 @@ export const joinSession = asyncHandler(async (req, res, next) => {
    
     
 
-    if (
-      student.paid === studentPaidStatus.Unpaid &&
-      settings?.studentCanJoin === false
-    ) {
-      return errorResponse({
-        req,
-        next,
-        status: 400,
-        message: "STUDENT_MUST_PAY",
-      });
-    }
+  
   }
   
   
