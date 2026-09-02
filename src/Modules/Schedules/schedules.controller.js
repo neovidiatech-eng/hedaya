@@ -1683,30 +1683,7 @@ export async function finalizeSession(scheduleId, t) {
         (session.end_time.getTime() - session.start_time.getTime()) /
         (60 * 1000 * 60);
 
-      let effectiveRate = 0;
-      if (session.isGroup) {
-        effectiveRate =
-          session.teacher?.group_hour_price ||
-          session.teacher?.hour_price ||
-          0;
-      } else {
-        let stLink = null;
-        if (session.studentId && session.teacherId) {
-          stLink = await tx.findOne({
-            model: "student_teacher",
-            where: {
-              studentId_teacherId: {
-                studentId: session.studentId,
-                teacherId: session.teacherId,
-              },
-            },
-          });
-        }
-        effectiveRate =
-          stLink && stLink.hour_price > 0
-            ? stLink.hour_price
-            : session.teacher?.hour_price || 0;
-      }
+      const effectiveRate = session.teacher?.hour_price || 0;
 
       let payoutAmount = sessionDuration * effectiveRate;
 
