@@ -869,31 +869,33 @@ export const getUserSchedules = asyncHandler(async (req, res, next) => {
   });
 
   const formattedSchedules = formatSchedules(schedules, req.timezone).map(
-  (schedule) => {
-    if (user.role?.name?.toLowerCase() !== "student") {
+    (schedule) => {
+      if (user.role?.name?.toLowerCase() !== "student") {
+        return schedule;
+      }
+
+      const log = Array.isArray(schedule.scheduleLogs)
+        ? schedule.scheduleLogs[0]
+        : schedule.scheduleLogs;
+      const now = new Date();
+
+      const isFinished = new Date(schedule.end_time) <= now;
+      const studentDidNotAttend = !log?.joinTime_student;
+
+      if (
+        isFinished &&
+        studentDidNotAttend &&
+        ["planned", "scheduled", "ongoing"].includes(schedule.status)
+      ) {
+        return {
+          ...schedule,
+          status: "missed",
+        };
+      }
+
       return schedule;
     }
-
-    const log = schedule.scheduleLogs?.[0];
-    const now = new Date();
-
-    const isFinished = new Date(schedule.end_time) <= now;
-    const studentDidNotAttend = !log?.joinTime_student;
-
-    if (
-      isFinished &&
-      studentDidNotAttend &&
-      ["planned", "scheduled", "ongoing"].includes(schedule.status)
-    ) {
-      return {
-        ...schedule,
-        status: "missed",
-      };
-    }
-
-    return schedule;
-  }
-);
+  );
 
   return successResponse({
     res,
@@ -1497,7 +1499,12 @@ export const submitReview = asyncHandler(async (req, res, next) => {
     });
   }
 
-  const isStudent = user.id === session.student?.user?.id;
+  const isStudent =
+    user.id === session.student?.user?.id ||
+    (session.isGroup &&
+      (session.groupStudents || []).some(
+        (g) => g.student?.user?.id === user.id
+      ));
   const isTeacher = user.id === session.teacher?.user?.id;
 
   if (!isStudent && !isTeacher) {
@@ -1568,149 +1575,37 @@ export const submitReview = asyncHandler(async (req, res, next) => {
   }
 
   const revieweeId = isStudent
-    ? session.teacher.user.id
-    : session.student.user.id;
+    ? session.teacher?.user?.id
+    : session.student?.user?.id ||
+      session.groupStudents?.[0]?.student?.user?.id;
 
   const role = isStudent ? "student" : "teacher";
 
-  let review;
+  // Finalize session first if not already finalized
+  await finalizeSession(id, req.t);
 
-  if (log.leaveTime_student && log.leaveTime_teacher) {
-    await finalizeSession(id, req.t);
-  }
+  const review = await db.create({
+    model: "Review",
+    data: {
+      scheduleId: id,
+      reviewerId: user.id,
+      revieweeId,
+      rating: parseInt(rating, 10),
+      comment,
+      role,
+    },
+  });
 
-  const effectiveStudentIds = session.isGroup
-    ? (session.groupStudents || []).map((g) => g.studentId)
-    : session.studentId
-    ? [session.studentId]
-    : [];
+  if (revieweeId) {
+    await updateAverageRating(revieweeId);
 
-  await db.transaction(async (tx) => {
-    if (isStudent && session.status === "ongoing") {
-      if (!teacherActuallyAttended) {
-        await tx.updateOne({
-          model: "schedule",
-          where: { id },
-          data: { status: "missed" },
-        });
-
-        for (const sId of effectiveStudentIds) {
-          await tx.updateOne({
-            model: "student",
-            where: { id: sId },
-            data: { sessions_remaining: { increment: 1 } },
-          });
-        }
-      } else {
-        const sessionDuration =
-          (session.end_time - session.start_time) / (60 * 1000 * 60);
-
-        let effectiveRate = 0;
-        if (session.isGroup) {
-          effectiveRate =
-            session.teacher?.group_hour_price || session.teacher?.hour_price || 0;
-        } else {
-          let stLink = null;
-          if (session.studentId && session.teacherId) {
-            stLink = await tx.findOne({
-              model: "student_teacher",
-              where: {
-                studentId_teacherId: {
-                  studentId: session.studentId,
-                  teacherId: session.teacherId,
-                },
-              },
-            });
-          }
-          effectiveRate =
-            stLink && stLink.hour_price > 0
-              ? stLink.hour_price
-              : session.teacher?.hour_price || 0;
-        }
-
-        let payoutAmount = sessionDuration * effectiveRate;
-
-        // Apply late teacher discount if applicable
-        if (log?.isTeacherLate && log?.joinTime_teacher) {
-          const settings = await tx.findFirst({ model: "setting" });
-          const rules = settings?.lateDiscountRules || [];
-          const diffMinutes =
-            (log.joinTime_teacher.getTime() - session.start_time.getTime()) /
-            60000;
-          const sortedRules = [...rules].sort(
-            (a, b) => b.lateMinutes - a.lateMinutes
-          );
-          const matchedRule = sortedRules.find(
-            (r) => diffMinutes >= r.lateMinutes
-          );
-          if (matchedRule) {
-            payoutAmount *= 1 - matchedRule.discountPercentage / 100;
-          }
-        }
-
-        const teacherWallet = await tx.findFirst({
-          model: "Wallet",
-          where: { userId: session.teacher.user_id },
-        });
-
-        if (teacherWallet && payoutAmount > 0) {
-          await tx.updateOne({
-            model: "Wallet",
-            where: { id: teacherWallet.id },
-            data: { balance: { increment: payoutAmount } },
-          });
-        }
-
-        await tx.updateOne({
-          model: "schedule",
-          where: { id },
-          data: { status: "completed" },
-        });
-
-        if (studentActuallyAttended) {
-          for (const sId of effectiveStudentIds) {
-            await tx.updateOne({
-              model: "student",
-              where: { id: sId },
-              data: { sessions_attended: { increment: 1 } },
-            });
-          }
-        }
-
-        if (log) {
-          await tx.updateOne({
-            model: "scheduleLog",
-            where: { id: log.id },
-            data: {
-              isTeacherCompleted: true,
-              isStudentAttended: studentActuallyAttended,
-            },
-          });
-        }
-      }
-    }
-
-    review = await tx.create({
-      model: "Review",
-      data: {
-        scheduleId: id,
-        reviewerId: user.id,
-        revieweeId,
-        rating: parseInt(rating, 10),
-        comment,
-        role,
-      },
+    await createNotification({
+      userId: revieweeId,
+      title: req.t("NOTIFICATION_REVIEW_RECEIVED_TITLE"),
+      message: req.t("NOTIFICATION_REVIEW_RECEIVED_MSG", { rating }),
+      type: "review_received",
     });
-  });
-
-  await updateAverageRating(revieweeId);
-
-  await createNotification({
-    userId: revieweeId,
-    title: req.t("NOTIFICATION_REVIEW_RECEIVED_TITLE"),
-    message: req.t("NOTIFICATION_REVIEW_RECEIVED_MSG", { rating }),
-    type: "review_received",
-  });
+  }
 
   return successResponse({
     res,
@@ -1725,7 +1620,7 @@ export const submitReview = asyncHandler(async (req, res, next) => {
 /*                         Helper Functions                           */
 /* ------------------------------------------------------------------ */
 
-async function finalizeSession(scheduleId, t) {
+export async function finalizeSession(scheduleId, t) {
   const session = await db.findOne({
     model: "schedule",
     where: { id: scheduleId },
@@ -1743,22 +1638,21 @@ async function finalizeSession(scheduleId, t) {
   const log = Array.isArray(session.scheduleLogs)
     ? session.scheduleLogs[0]
     : session.scheduleLogs;
-  if (!log) return;
 
   const teacherActuallyAttended =
-    log.isTeacherCompleted === true || Boolean(log.joinTime_teacher);
+    Boolean(log?.isTeacherCompleted) || Boolean(log?.joinTime_teacher);
 
-  const studentActuallyAttended = Boolean(log.joinTime_student);
+  const studentActuallyAttended = Boolean(log?.joinTime_student);
 
-  // Path 1: Neither joined at all
-  if (!studentActuallyAttended && !teacherActuallyAttended) {
-    const finalStudents = session.isGroup
-      ? session.groupStudents.map((gs) => gs.student).filter(Boolean)
-      : session.student
-      ? [session.student]
-      : [];
+  const finalStudents = session.isGroup
+    ? (session.groupStudents || []).map((gs) => gs.student).filter(Boolean)
+    : session.student
+    ? [session.student]
+    : [];
 
-    await db.transaction(async (tx) => {
+  await db.transaction(async (tx) => {
+    if (!teacherActuallyAttended) {
+      // Teacher missed session
       for (const st of finalStudents) {
         await tx.updateOne({
           model: "student",
@@ -1772,8 +1666,113 @@ async function finalizeSession(scheduleId, t) {
         where: { id: scheduleId },
         data: { status: "missed" },
       });
-    });
 
+      if (log) {
+        await tx.updateOne({
+          model: "scheduleLog",
+          where: { id: log.id },
+          data: {
+            isTeacherCompleted: false,
+            isStudentAttended: studentActuallyAttended,
+          },
+        });
+      }
+    } else {
+      // Teacher attended
+      const sessionDuration =
+        (session.end_time.getTime() - session.start_time.getTime()) /
+        (60 * 1000 * 60);
+
+      let effectiveRate = 0;
+      if (session.isGroup) {
+        effectiveRate =
+          session.teacher?.group_hour_price ||
+          session.teacher?.hour_price ||
+          0;
+      } else {
+        let stLink = null;
+        if (session.studentId && session.teacherId) {
+          stLink = await tx.findOne({
+            model: "student_teacher",
+            where: {
+              studentId_teacherId: {
+                studentId: session.studentId,
+                teacherId: session.teacherId,
+              },
+            },
+          });
+        }
+        effectiveRate =
+          stLink && stLink.hour_price > 0
+            ? stLink.hour_price
+            : session.teacher?.hour_price || 0;
+      }
+
+      let payoutAmount = sessionDuration * effectiveRate;
+
+      // Apply late teacher discount if applicable
+      if (log?.isTeacherLate && log?.joinTime_teacher) {
+        const settings = await tx.findFirst({ model: "setting" });
+        const rules = settings?.lateDiscountRules || [];
+        const diffMinutes =
+          (log.joinTime_teacher.getTime() - session.start_time.getTime()) /
+          60000;
+        const sortedRules = [...rules].sort(
+          (a, b) => b.lateMinutes - a.lateMinutes
+        );
+        const matchedRule = sortedRules.find(
+          (r) => diffMinutes >= r.lateMinutes
+        );
+        if (matchedRule) {
+          payoutAmount *= 1 - matchedRule.discountPercentage / 100;
+        }
+      }
+
+      if (session.teacher?.user_id && payoutAmount > 0) {
+        const teacherWallet = await tx.findFirst({
+          model: "Wallet",
+          where: { userId: session.teacher.user_id },
+        });
+
+        if (teacherWallet) {
+          await tx.updateOne({
+            model: "Wallet",
+            where: { id: teacherWallet.id },
+            data: { balance: { increment: payoutAmount } },
+          });
+        }
+      }
+
+      await tx.updateOne({
+        model: "schedule",
+        where: { id: scheduleId },
+        data: { status: "completed" },
+      });
+
+      if (studentActuallyAttended) {
+        for (const st of finalStudents) {
+          await tx.updateOne({
+            model: "student",
+            where: { id: st.id },
+            data: { sessions_attended: { increment: 1 } },
+          });
+        }
+      }
+
+      if (log) {
+        await tx.updateOne({
+          model: "scheduleLog",
+          where: { id: log.id },
+          data: {
+            isTeacherCompleted: true,
+            isStudentAttended: studentActuallyAttended,
+          },
+        });
+      }
+    }
+  });
+
+  if (!teacherActuallyAttended && !studentActuallyAttended) {
     const studentUserIds = session.student?.user_id
       ? [session.student.user_id]
       : (session.groupStudents || [])
@@ -1795,94 +1794,6 @@ async function finalizeSession(scheduleId, t) {
       title: "تم تفويت الجلسة",
       message: `تم تفويت الجلسة "${session.title}" (لم يحضر أي طرف).`,
       type: "session_missed",
-    });
-    return;
-  }
-
-  // Path 2: Review window expired (48h after session end_time)
-  const now = new Date();
-  const deadline = new Date(session.end_time.getTime() + 48 * 60 * 60 * 1000);
-
-  if (now > deadline) {
-    const finalStudents = session.isGroup
-      ? session.groupStudents.map((gs) => gs.student).filter(Boolean)
-      : session.student
-      ? [session.student]
-      : [];
-
-    await db.transaction(async (tx) => {
-      if (!teacherActuallyAttended) {
-        for (const st of finalStudents) {
-          await tx.updateOne({
-            model: "student",
-            where: { id: st.id },
-            data: { sessions_remaining: { increment: 1 } },
-          });
-        }
-
-        await tx.updateOne({
-          model: "schedule",
-          where: { id: scheduleId },
-          data: { status: "missed" },
-        });
-      } else {
-        const sessionDuration =
-          (session.end_time - session.start_time) / (60 * 1000 * 60);
-
-        let effectiveRate = 0;
-        if (session.isGroup) {
-          effectiveRate =
-            session.teacher?.group_hour_price || session.teacher?.hour_price || 0;
-        } else {
-          let stLink = null;
-          if (session.studentId && session.teacherId) {
-            stLink = await tx.findOne({
-              model: "student_teacher",
-              where: {
-                studentId_teacherId: {
-                  studentId: session.studentId,
-                  teacherId: session.teacherId,
-                },
-              },
-            });
-          }
-          effectiveRate =
-            stLink && stLink.hour_price > 0
-              ? stLink.hour_price
-              : session.teacher?.hour_price || 0;
-        }
-
-        let payoutAmount = sessionDuration * effectiveRate;
-
-        const teacherWallet = await tx.findFirst({
-          model: "Wallet",
-          where: { userId: session.teacher.user_id },
-        });
-
-        if (teacherWallet && payoutAmount > 0) {
-          await tx.updateOne({
-            model: "Wallet",
-            where: { id: teacherWallet.id },
-            data: { balance: { increment: payoutAmount } },
-          });
-        }
-
-        await tx.updateOne({
-          model: "schedule",
-          where: { id: scheduleId },
-          data: { status: "completed" },
-        });
-
-        if (studentActuallyAttended) {
-          for (const st of finalStudents) {
-            await tx.updateOne({
-              model: "student",
-              where: { id: st.id },
-              data: { sessions_attended: { increment: 1 } },
-            });
-          }
-        }
-      }
     });
   }
 }
