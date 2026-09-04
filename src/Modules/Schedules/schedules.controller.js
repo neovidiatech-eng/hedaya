@@ -174,7 +174,13 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
   let normalizedMaxStudents =
     maxStudents === "0" || maxStudents === 0 || maxStudents === "unlimited"
       ? "unlimited"
-      : String(maxStudents || 1);
+      : String(
+          maxStudents !== undefined && maxStudents !== null && maxStudents !== ""
+            ? maxStudents
+            : computedIsGroup
+            ? Math.max(effectiveStudentIds.length, 10)
+            : 1
+        );
 
   if (computedIsGroup && normalizedMaxStudents !== "unlimited") {
     const max = parseInt(normalizedMaxStudents, 10);
@@ -451,7 +457,13 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
   let normalizedMaxStudents =
     maxStudents === "0" || maxStudents === 0 || maxStudents === "unlimited"
       ? "unlimited"
-      : String(maxStudents || 1);
+      : String(
+          maxStudents !== undefined && maxStudents !== null && maxStudents !== ""
+            ? maxStudents
+            : computedIsGroup
+            ? Math.max(effectiveStudentIds.length, 10)
+            : 1
+        );
 
   if (computedIsGroup && normalizedMaxStudents !== "unlimited") {
     const max = parseInt(normalizedMaxStudents, 10);
