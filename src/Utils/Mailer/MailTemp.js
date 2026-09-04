@@ -440,8 +440,9 @@ const createAcademyMailTemp = ({
   colors,
   icon = "📖",
 }) => {
-  return ({ title, otp, text, username = "there", lang = "en" }) => {
+  return ({ title, otp, text, username = "there", lang = "en", showButton }) => {
     const isAr = lang === "ar";
+    const shouldShowButton = showButton !== undefined ? Boolean(showButton) : !otp;
     const defaultTitle = isAr ? "تفعيل حسابك" : "Verify your account";
     const displayTitle = title || defaultTitle;
     const safeOtp = String(otp ?? "").trim();
@@ -767,6 +768,9 @@ const createAcademyMailTemp = ({
                   : ""
               }
 
+              ${
+                shouldShowButton
+                  ? `
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px auto 0 auto;">
                 <tr>
                   <td align="center">
@@ -788,6 +792,9 @@ const createAcademyMailTemp = ({
                   </td>
                 </tr>
               </table>
+              `
+                  : ""
+              }
 
             </td>
           </tr>
