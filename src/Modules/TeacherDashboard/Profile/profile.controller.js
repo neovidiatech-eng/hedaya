@@ -10,7 +10,7 @@ import * as db from "../../../database/dbService.js";
 export const getProfile = asyncHandler(async (req, res, next) => {
   const user = await db.findOne({
     model: "teacher",
-    where: { user_id: req.user.id },
+    where: { user_id: req?.user?.id },
     include: {
       user: {
         include: {
@@ -44,24 +44,24 @@ export const getProfile = asyncHandler(async (req, res, next) => {
     });
   }
 
-  const decTeacherPhone = looksEncrypted(user.user.phone) ? await decryptText({ text: user.user.phone }) : user.user.phone;
+  const decTeacherPhone = looksEncrypted(user?.user?.phone) ? await decryptText({ text: user?.user?.phone }) : user?.user?.phone;
   
-  for (const schedule of user.schedules) {
+  for (const schedule of user?.schedules) {
     if (schedule.student && schedule.student.user && schedule.student.user.phone) {
       schedule.student.user.phone = looksEncrypted(schedule.student.user.phone) ? await decryptText({ text: schedule.student.user.phone }) : schedule.student.user.phone;
     }
   }
 
   const students = Object.values(
-    user.schedules.reduce((acc, item) => {
-      const student = item.student;
+    user?.schedules.reduce((acc, item) => {
+      const student = item?.student;
       if (!acc[student?.id]) {
-        acc[student.id] = {
-          id: student.id,
-          name: student?.user.name,
-          code: `STU-${student.id.slice(0, 3)}`,
-          email: student.user.email,
-          phone: `${student.user.code_country}${student.user.phone}`,
+        acc[student?.id] = {
+          id: student?.id,
+          name: student?.user?.name,
+          code: `STU-${student?.id?.slice(0, 3)}`,
+          email: student?.user?.email,
+          phone: `${student?.user?.code_country}${student?.user?.phone}`,
           subject: {
             name: item.subject.name_en,
             code: `SUB-${item.subject.id.slice(0, 3)}`,
@@ -143,7 +143,7 @@ export const getProfile = asyncHandler(async (req, res, next) => {
 export const getDashboardStats = asyncHandler(async (req, res, next) => {
   const user = await db.findOne({
     model: "teacher",
-    where: { user_id: req.user.id },
+    where: { user_id: req?.user?.id },
     include: {
       user: {
         include: {
@@ -177,7 +177,7 @@ export const getDashboardStats = asyncHandler(async (req, res, next) => {
   const todaySchedules = await db.findMany({
     model: "schedule",
     where: {
-      teacherId: user.id,
+      teacherId: user?.id,
       start_time: {
         gte: startOfDay,
         lte: endOfDay,
@@ -194,27 +194,27 @@ export const getDashboardStats = asyncHandler(async (req, res, next) => {
     });
   }
 
-  const decTeacherPhone = looksEncrypted(user.user.phone) ? await decryptText({ text: user.user.phone }) : user.user.phone;
+  const decTeacherPhone = looksEncrypted(user?.user?.phone) ? await decryptText({ text: user?.user?.phone }) : user?.user?.phone;
   
-  for (const schedule of user.schedules) {
-    if (schedule.student && schedule.student.user && schedule.student.user.phone) {
-      schedule.student.user.phone = looksEncrypted(schedule.student.user.phone) ? await decryptText({ text: schedule.student.user.phone }) : schedule.student.user.phone;
+  for (const schedule of user?.schedules) {
+    if (schedule?.student && schedule?.student?.user && schedule?.student?.user?.phone) {
+      schedule.student.user.phone = looksEncrypted(schedule?.student?.user?.phone) ? await decryptText({ text: schedule?.student?.user?.phone }) : schedule?.student?.user?.phone;
     }
   }
 
   const students = Object.values(
-    user.schedules.reduce((acc, item) => {
-      const student = item.student;
+    user?.schedules.reduce((acc, item) => {
+      const student = item?.student;
       if (!acc[student?.id]) {
-        acc[student.id] = {
-          id: student.id,
-          name: student?.user.name,
-          code: `STU-${student.id.slice(0, 3)}`,
-          email: student.user.email,
-          phone: `${student.user.code_country}${student.user.phone}`,
+        acc[student?.id] = {
+          id: student?.id,
+          name: student?.user?.name,
+          code: `STU-${student?.id?.slice(0, 3)}`,
+          email: student?.user?.email,
+          phone: `${student?.user?.code_country}${student?.user?.phone}`,
           subject: {
-            name: item.subject.name_en,
-            code: `SUB-${item.subject.id.slice(0, 3)}`,
+            name: item?.subject?.name_en,
+            code: `SUB-${item?.subject?.id?.slice(0, 3)}`,
           },
           sessions: `${student.sessions_attended}/${student.sessions}`,
         };
