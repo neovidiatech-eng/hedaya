@@ -7,6 +7,15 @@ import { decryptText } from "../../../Utils/Security/index.js";
 import * as db from "../../../database/dbService.js";
 
 export const getTeacherTransactions = asyncHandler(async (req, res, next) => {
+  if (!req?.user?.id) {
+    return errorResponse({
+      next,
+      req,
+      status: 401,
+      message: "UNAUTHORIZED",
+    });
+  }
+
   const teacher = await db.findOne({
     model: "teacher",
     where: { user_id: req.user.id },
@@ -15,7 +24,7 @@ export const getTeacherTransactions = asyncHandler(async (req, res, next) => {
     },
   });
 
-  if (!teacher) {
+  if (!teacher || !teacher.user) {
     return errorResponse({
       next,
       req,
@@ -48,17 +57,17 @@ export const getTeacherTransactions = asyncHandler(async (req, res, next) => {
   }
 
   const mapped = {
-    balance: wallet.balance,
+    balance: wallet.balance ?? 0,
     currency: {
-      code: wallet.currency.code,
-      symbol: wallet.currency.symbol,
+      code: wallet.currency?.code || "",
+      symbol: wallet.currency?.symbol || "",
     },
-    transactions: wallet.transactions.map((t) => ({
-      type: t.type,
-      amount: t.amount,
-      status: t.status,
-      reason: t.reason,
-      date: t.createdAt,
+    transactions: (wallet.transactions || []).map((t) => ({
+      type: t?.type || "",
+      amount: t?.amount ?? 0,
+      status: t?.status || "",
+      reason: t?.reason || "",
+      date: t?.createdAt || null,
     })),
   };
 
