@@ -1292,15 +1292,10 @@ export const joinSession = asyncHandler(async (req, res, next) => {
       });
     }
    
-    
+  
 
   
   }
-  
-  
-
-
-
 
   if (session.status === "cancelled") {
     return errorResponse({
@@ -1384,16 +1379,18 @@ export const joinSession = asyncHandler(async (req, res, next) => {
       data: { status: "ongoing" },  
     });
   }
-
+  
   // Notify other party
   const targetUserId =
     role === "student" ? session.teacherId : session.studentId;
-  const targetUser = await db.findOne({
-    model: role === "student" ? "teacher" : "student",
-    where: { id: targetUserId },
-    include: { user: true },
-  });
-
+  let targetUser = null;
+  if(targetUserId){
+    targetUser = await db.findOne({
+      model: role === "student" ? "teacher" : "student",
+      where:{id:targetUserId},
+      include:{user:true}
+    })
+  }
   if (targetUser?.user?.id) {
     await createNotification({
       userId: targetUser.user.id,
