@@ -569,6 +569,11 @@ export const getMyStudents = asyncHandler(async (req, res, next) => {
   const students = Object.values(
     myStudents.reduce((acc, item) => {
       const student = item.student;
+      const subject = item.subject;
+
+      if(!student || !student.user || !subject){
+        return acc;
+      }
 
       if (!acc[student.id]) {
         acc[student.id] = {
