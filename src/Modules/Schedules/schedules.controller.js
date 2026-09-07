@@ -174,7 +174,13 @@ export const createSchedule = asyncHandler(async (req, res, next) => {
   let normalizedMaxStudents =
     maxStudents === "0" || maxStudents === 0 || maxStudents === "unlimited"
       ? "unlimited"
-      : String(maxStudents || 1);
+      : String(
+          maxStudents !== undefined && maxStudents !== null && maxStudents !== ""
+            ? maxStudents
+            : computedIsGroup
+            ? Math.max(effectiveStudentIds.length, 10)
+            : 1
+        );
 
   if (computedIsGroup && normalizedMaxStudents !== "unlimited") {
     const max = parseInt(normalizedMaxStudents, 10);
@@ -451,7 +457,13 @@ export const createRecurringSchedule = asyncHandler(async (req, res, next) => {
   let normalizedMaxStudents =
     maxStudents === "0" || maxStudents === 0 || maxStudents === "unlimited"
       ? "unlimited"
-      : String(maxStudents || 1);
+      : String(
+          maxStudents !== undefined && maxStudents !== null && maxStudents !== ""
+            ? maxStudents
+            : computedIsGroup
+            ? Math.max(effectiveStudentIds.length, 10)
+            : 1
+        );
 
   if (computedIsGroup && normalizedMaxStudents !== "unlimited") {
     const max = parseInt(normalizedMaxStudents, 10);
@@ -1280,15 +1292,10 @@ export const joinSession = asyncHandler(async (req, res, next) => {
       });
     }
    
-    
+  
 
   
   }
-  
-  
-
-
-
 
   if (session.status === "cancelled") {
     return errorResponse({
@@ -1372,16 +1379,18 @@ export const joinSession = asyncHandler(async (req, res, next) => {
       data: { status: "ongoing" },  
     });
   }
-
+  
   // Notify other party
   const targetUserId =
     role === "student" ? session.teacherId : session.studentId;
-  const targetUser = await db.findOne({
-    model: role === "student" ? "teacher" : "student",
-    where: { id: targetUserId },
-    include: { user: true },
-  });
-
+  let targetUser = null;
+  if(targetUserId){
+    targetUser = await db.findOne({
+      model: role === "student" ? "teacher" : "student",
+      where:{id:targetUserId},
+      include:{user:true}
+    })
+  }
   if (targetUser?.user?.id) {
     await createNotification({
       userId: targetUser.user.id,
