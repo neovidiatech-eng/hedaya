@@ -567,6 +567,18 @@ export const getMyStudents = asyncHandler(async (req, res, next) => {
           user: true,
         },
       },
+      groupStudents:{
+        include:{
+          student:{
+            include:{
+              user:true
+            }
+          }
+        }
+      },
+
+
+
     },
   });
 
@@ -595,7 +607,7 @@ export const getMyStudents = asyncHandler(async (req, res, next) => {
           },
           sessions: `${student.sessions_attended}/${student.sessions}`,
         };
-      }decryptPassword
+      }
 
       return acc;
     }, {}),
