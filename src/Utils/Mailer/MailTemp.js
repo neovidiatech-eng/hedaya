@@ -476,6 +476,7 @@ const createAcademyMailTemp = ({
         : "";
 
     const academyDisplayName = isAr ? academyNameAr : academyName;
+    const frontendBaseUrl = (process.env.FRONTEND_URL || "http://localhost:4200").replace(/\/+$/, "");
 
     return `<!DOCTYPE html>
 <html lang="${lang}" dir="${isAr ? "rtl" : "ltr"}">
@@ -774,7 +775,7 @@ const createAcademyMailTemp = ({
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:16px auto 0 auto;">
                 <tr>
                   <td align="center">
-                    <a href="${process.env.FRONTEND_URL || "http://localhost:4200"}/#/" target="_blank" class="cta-btn" style="
+                    <a href="${frontendBaseUrl}/#/" target="_blank" class="cta-btn" style="
                       display:inline-block;
                       padding:18px 44px;
                       background:linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 50%, ${colors.primaryDark} 100%);

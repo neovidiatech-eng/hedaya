@@ -103,6 +103,7 @@ services:
       BREVO_SENDER_NAME: ${BREVO_SENDER_NAME}
       PORT: "3008"
       CORS_ORIGINS: ${CORS_ORIGINS}
+      FRONTEND_URL: ${FRONTEND_URL}
     depends_on:
       postgres:
         condition: service_healthy
