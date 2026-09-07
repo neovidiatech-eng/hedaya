@@ -15,6 +15,7 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
 import { decrypt } from "dotenv";
+import { schedule } from "node-cron";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -548,9 +549,12 @@ export const deleteTeacher = asyncHandler(async (req, res, next) => {
 export const getMyStudents = asyncHandler(async (req, res, next) => {
   const teacher = req.user.teacher;
 
-  console.log("[getMyStudents] Fetching students for teacherId:", teacher.id);
+  console.log(
+    "[getMyStudents] Fetching students for teacherId:",
+    teacher.id,
+  );
 
-  const myStudents = await db.findMany({
+  const mySchedules = await db.findMany({
     model: "schedule",
     where: {
       teacherId: teacher.id,
@@ -561,59 +565,119 @@ export const getMyStudents = asyncHandler(async (req, res, next) => {
           user: true,
         },
       },
+
       subject: true,
+
       teacher: {
         include: {
           user: true,
         },
       },
-      groupStudents:{
-        include:{
-          student:{
-            include:{
-              user:true
-            }
-          }
-        }
+
+      groupStudents: {
+        include: {
+          student: {
+            include: {
+              user: true,
+            },
+          },
+        },
       },
-
-
-
     },
   });
 
-  console.log("[getMyStudents] Raw schedule records fetched:", myStudents.length);
+  const studentsMap = new Map();
 
-  const students = Object.values(
-    myStudents.reduce((acc, item) => {
-      const student = item.student;
-      const subject = item.subject;
+  for (const schedule of mySchedules) {
+    const subject = schedule.subject;
 
-      if(!student || !student.user || !subject){
-        console.log("[getMyStudents] Skipping schedule item — missing student, user, or subject:", item.id);
-        return acc;
+    if (!subject) {
+      console.log(
+        "[getMyStudents] Skipping schedule item — missing subject:",
+        schedule.id,
+      );
+
+      continue;
+    }
+
+    // Individual student
+    if (schedule.student?.user) {
+      const student = schedule.student;
+
+      if (!studentsMap.has(student.id)) {
+        studentsMap.set(student.id, {
+          student,
+          subject,
+        });
       }
+    }
 
-      if (!acc[student.id]) {
-        acc[student.id] = {
-          id: student.id,
-          name: student.user.name,
-          code: `STU-${student.id.slice(0, 3)}`,
-          email: student.user.email,
-          phone: `${student.user.code_country}${decrypt(student.user.phone),process.env.ENCRYPT_KEY}`,
-          subject: {
-            name: item.subject.name_en,
-            code: `SUB-${item.subject.id.slice(0, 3)}`,
-          },
-          sessions: `${student.sessions_attended}/${student.sessions}`,
-        };
+    // Group students
+    if (schedule.groupStudents?.length) {
+      for (const groupStudent of schedule.groupStudents) {
+        const student = groupStudent.student;
+
+        if (!student?.user) {
+          console.log(
+            "[getMyStudents] Skipping group student — student/user missing:",
+            groupStudent.id,
+          );
+
+          continue;
+        }
+
+        if (!studentsMap.has(student.id)) {
+          studentsMap.set(student.id, {
+            student,
+            subject,
+          });
+        }
       }
+    }
+  }
 
-      return acc;
-    }, {}),
+  console.log(
+    "[getMyStudents] Unique students found:",
+    studentsMap.size,
   );
 
-  console.log("[getMyStudents] Unique students resolved:", students.length);
+  // ==========================================
+  // Build response
+  // ==========================================
+
+  const students = await Promise.all(
+    Array.from(studentsMap.values()).map(
+      async ({ student, subject }) => {
+        const user = await decryptUserForResponse({
+          ...student.user,
+        });
+
+        return {
+          id: student.id,
+
+          name: user.name,
+
+          code: `STU-${student.id.slice(0, 3)}`,
+
+          email: user.email,
+
+          phone: `${user.code_country}${user.phone}`,
+
+          subject: {
+            name: subject.name_en,
+            code: `SUB-${subject.id.slice(0, 3)}`,
+          },
+
+          sessions: `${student.sessions_attended}/${student.sessions}`,
+        };
+      },
+    ),
+  );
+
+  console.log(
+    "[getMyStudents] Students resolved:",
+    students.length,
+  );
 
   return successResponse({
     res,
@@ -622,7 +686,6 @@ export const getMyStudents = asyncHandler(async (req, res, next) => {
     data: students,
   });
 });
-
 
 // Helper – wrap a cell value so commas/quotes/newlines don't break the CSV
 const escapeCsvCell = (value) => {
