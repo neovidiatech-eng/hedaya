@@ -6,6 +6,7 @@ import {
 import * as db from "../../database/dbService.js";
 import { ensureExists } from "../../database/genericService.js";
 import {
+  decryptPassword,
   decryptUserSensitiveFields,
   encryptPassword,
 } from "../../Utils/Security/index.js";
@@ -13,6 +14,7 @@ import { createAdminNotification } from "../Notifications/notifications.controll
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
 import timezone from "dayjs/plugin/timezone.js";
+import { decrypt } from "dotenv";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -586,14 +588,14 @@ export const getMyStudents = asyncHandler(async (req, res, next) => {
           name: student.user.name,
           code: `STU-${student.id.slice(0, 3)}`,
           email: student.user.email,
-          phone: `${student.user.code_country}${student.user.phone}`,
+          phone: `${student.user.code_country}${decrypt(student.user.phone),process.env.ENCRYPT_KEY}`,
           subject: {
             name: item.subject.name_en,
             code: `SUB-${item.subject.id.slice(0, 3)}`,
           },
           sessions: `${student.sessions_attended}/${student.sessions}`,
         };
-      }
+      }decryptPassword
 
       return acc;
     }, {}),
