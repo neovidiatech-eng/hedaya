@@ -7,6 +7,7 @@ import * as db from "../../database/dbService.js";
 import { ensureExists } from "../../database/genericService.js";
 import {
   decryptPassword,
+  decryptUserForResponse,
   decryptUserSensitiveFields,
   encryptPassword,
 } from "../../Utils/Security/index.js";
