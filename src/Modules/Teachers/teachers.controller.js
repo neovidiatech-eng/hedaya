@@ -546,6 +546,8 @@ export const deleteTeacher = asyncHandler(async (req, res, next) => {
 export const getMyStudents = asyncHandler(async (req, res, next) => {
   const teacher = req.user.teacher;
 
+  console.log("[getMyStudents] Fetching students for teacherId:", teacher.id);
+
   const myStudents = await db.findMany({
     model: "schedule",
     where: {
@@ -566,12 +568,15 @@ export const getMyStudents = asyncHandler(async (req, res, next) => {
     },
   });
 
+  console.log("[getMyStudents] Raw schedule records fetched:", myStudents.length);
+
   const students = Object.values(
     myStudents.reduce((acc, item) => {
       const student = item.student;
       const subject = item.subject;
 
       if(!student || !student.user || !subject){
+        console.log("[getMyStudents] Skipping schedule item — missing student, user, or subject:", item.id);
         return acc;
       }
 
@@ -593,6 +598,9 @@ export const getMyStudents = asyncHandler(async (req, res, next) => {
       return acc;
     }, {}),
   );
+
+  console.log("[getMyStudents] Unique students resolved:", students.length);
+
   return successResponse({
     res,
     req,
