@@ -106,6 +106,7 @@
   "RECURRING_DELETE_SUCCESS": "{{length}} recurring sessions deleted successfully",
   "SESSION_CONFLICT": "Update failed due to conflict with existing session",
   "INSUFFICIENT_SESSIONS_RESTORE": "Student does not have enough sessions to restore this session",
+  "STATUSES_SYNCED_SUCCESSFULLY": "Session statuses synced successfully",
   "SYSTEM_WALLET_NOT_FOUND": "System wallet not found. Please run the database seeder.",
   "INSUFFICIENT_BALANCE": "Insufficient wallet balance. Available: {{available}}, Required: {{required}}",
   "TOO_EARLY_TO_JOIN": "Too early to join the session. Current: {{now}}, Session starts: {{start}}",

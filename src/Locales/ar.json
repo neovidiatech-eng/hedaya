@@ -105,6 +105,7 @@
   "RECURRING_DELETE_SUCCESS": "تم حذف {{length}} جلسة متكررة بنجاح",
   "SESSION_CONFLICT": "فشل التحديث بسبب وجود تعارض مع جلسة أخرى",
   "INSUFFICIENT_SESSIONS_RESTORE": "الطالب ليس لديه جلسات كافية لاستعادة هذه الجلسة",
+  "STATUSES_SYNCED_SUCCESSFULLY": "تمت مزامنة وإعادة حساب حالات الحصص بنجاح",
   "SYSTEM_WALLET_NOT_FOUND": "محفظة النظام غير موجودة. يرجى تشغيل ملف الـ seeder.",
   "INSUFFICIENT_BALANCE": "رصيد المحفظة غير كافٍ. المتاح: {{available}}، المطلوب: {{required}}",
   "USER_ALREADY_HAVE_PENDING_SUBSCRIPTION_REQUEST": "لديك طلب اشتراك معلق بالفعل، يرجى الانتظار حتى تتم الموافقة عليه",
