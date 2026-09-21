@@ -149,6 +149,12 @@ export const approveWithdrawal = asyncHandler(async (req, res, next) => {
       model: "Wallet",
       where: { userId: request.user_id, type: "teacher" },
     });
+    console.log({
+      wallet,
+      is:wallet.balance,
+      request:request.amount
+    });
+    
 
     if (!wallet || wallet.balance < request.amount) {
       throw new Error("INSUFFICIENT_BALANCE");
