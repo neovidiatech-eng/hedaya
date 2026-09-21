@@ -116,14 +116,27 @@ export const approveWithdrawal = asyncHandler(async (req, res, next) => {
   const request = await db.findOne({
     model: "WithdrawalRequest",
     where: { id },
-    include:{
-      teacher:true,
-      
-    } 
+    include: {
+      teacher: true,
+    },
   });
+  console.log(request, "request");
 
+  const user = await db.findOne({
+    model: "User",
+    where: { id: request.teacherId },
+  });
+  console.log(user, "user");
 
-  
+  if (!user) {
+    return errorResponse({
+      req,
+      next,
+      status: 404,
+      message: "USER_NOT_FOUND",
+    });
+  }
+
   if (!request) {
     return errorResponse({
       req,
@@ -147,14 +160,14 @@ export const approveWithdrawal = asyncHandler(async (req, res, next) => {
     // 2.a Re-check balance (Double check for race conditions)
     const wallet = await tx.findFirst({
       model: "Wallet",
-      where: { userId: request.user_id, type: "teacher" },
+      where: { userId: request.teacherId, type: "teacher" },
     });
+
     console.log({
       wallet,
-      is:wallet.balance,
-      request:request.amount
+      is: wallet.balance,
+      request: request.amount,
     });
-    
 
     if (!wallet || wallet.balance < request.amount) {
       throw new Error("INSUFFICIENT_BALANCE");
@@ -176,7 +189,7 @@ export const approveWithdrawal = asyncHandler(async (req, res, next) => {
         amount: request.amount,
         withdrawalRequestId: request.id,
         reason: req.t("WITHDRAWAL_PAYOUT_REASON", {
-          id: request.teacher.name || request.teacher.email ||request.id,
+          id: request.teacher.name || request.teacher.email || request.id,
         }),
         status: "completed",
       },
