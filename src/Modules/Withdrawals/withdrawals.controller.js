@@ -117,25 +117,13 @@ export const approveWithdrawal = asyncHandler(async (req, res, next) => {
     model: "WithdrawalRequest",
     where: { id },
     include: {
-      teacher: true,
+      teacher: {
+        include: {
+          wallet: true,
+        },
+      },
     },
   });
-  console.log(request, "request");
-
-  const user = await db.findOne({
-    model: "User",
-    where: { id: request.teacherId },
-  });
-  console.log(user, "user");
-
-  if (!user) {
-    return errorResponse({
-      req,
-      next,
-      status: 404,
-      message: "USER_NOT_FOUND",
-    });
-  }
 
   if (!request) {
     return errorResponse({
@@ -163,11 +151,6 @@ export const approveWithdrawal = asyncHandler(async (req, res, next) => {
       where: { userId: request.teacherId, type: "teacher" },
     });
 
-    console.log({
-      wallet,
-      is: wallet.balance,
-      request: request.amount,
-    });
 
     if (!wallet || wallet.balance < request.amount) {
       throw new Error("INSUFFICIENT_BALANCE");
